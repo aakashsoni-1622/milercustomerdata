@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Card from './ui/Card';
-import Input from './ui/Input';
 import Button from './ui/Button';
+import FilterModal from './ui/FilterModal';
 
 interface Order {
   id: number;
@@ -70,6 +70,11 @@ const OrdersTable: React.FC = () => {
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('DESC');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [modifiedOrders, setModifiedOrders] = useState<Record<number, Partial<Order>>>({});
+  const [hasChanges, setHasChanges] = useState(false);
+  const [editingField, setEditingField] = useState<{orderId: number, field: keyof Order} | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
 
   // Debounce function
   const useDebounce = (value: typeof filters, delay: number) => {
@@ -133,8 +138,23 @@ const OrdersTable: React.FC = () => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+  const handleApplyFilters = (newFilters: Record<string, string>) => {
+    setFilters({
+      search: newFilters.search || '',
+      customerName: newFilters.customerName || '',
+      orderDate: newFilters.orderDate || '',
+      orderStatus: newFilters.orderStatus || '',
+      orderTotal: newFilters.orderTotal || '',
+      state: newFilters.state || '',
+      paymentMode: newFilters.paymentMode || ''
+    });
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: '', customerName: '', orderDate: '', orderStatus: '',
+      orderTotal: '', state: '', paymentMode: ''
+    });
   };
 
   const handleSort = (column: string) => {
@@ -150,14 +170,153 @@ const OrdersTable: React.FC = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const formatBoolean = (value: boolean) => {
+  const handleCheckboxChange = (orderId: number, field: keyof Order, value: boolean) => {
+    setModifiedOrders(prev => {
+      const updated = {
+        ...prev,
+        [orderId]: {
+          ...prev[orderId],
+          [field]: value
+        }
+      };
+      
+      // Check if there are any changes
+      const hasAnyChanges = Object.keys(updated).length > 0;
+      setHasChanges(hasAnyChanges);
+      
+      return updated;
+    });
+  };
+
+  const handleFieldEdit = (orderId: number, field: keyof Order, currentValue: string) => {
+    setEditingField({ orderId, field });
+    setEditValue(currentValue);
+  };
+
+  const handleFieldSave = (orderId: number, field: keyof Order) => {
+    setModifiedOrders(prev => {
+      const updated = {
+        ...prev,
+        [orderId]: {
+          ...prev[orderId],
+          [field]: editValue
+        }
+      };
+      
+      // Check if there are any changes
+      const hasAnyChanges = Object.keys(updated).length > 0;
+      setHasChanges(hasAnyChanges);
+      
+      return updated;
+    });
+    
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleFieldCancel = () => {
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleCancelAllChanges = () => {
+    setModifiedOrders({});
+    setHasChanges(false);
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleFieldKeyPress = (e: React.KeyboardEvent, orderId: number, field: keyof Order) => {
+    if (e.key === 'Enter') {
+      handleFieldSave(orderId, field);
+    } else if (e.key === 'Escape') {
+      handleFieldCancel();
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      setLoading(true);
+      
+      // Update each modified order
+      for (const [orderId, changes] of Object.entries(modifiedOrders)) {
+        const response = await fetch(`/api/orders/update`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: parseInt(orderId),
+            ...changes
+          }),
+        });
+
+        if (!response.ok) {
+          console.error(`Failed to update order ${orderId}`);
+        }
+      }
+
+      // Clear modifications and refresh data
+      setModifiedOrders({});
+      setHasChanges(false);
+      fetchOrders();
+      
+    } catch (error) {
+      console.error('Error saving changes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatBoolean = (order: Order, field: keyof Order) => {
+    const isModified = modifiedOrders[order.id]?.[field] !== undefined;
+    const currentValue = isModified 
+      ? modifiedOrders[order.id]![field] as boolean 
+      : order[field] as boolean;
+
     return (
       <input
         type="checkbox"
-        checked={value}
-        readOnly
-        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+        checked={currentValue}
+        onChange={(e) => handleCheckboxChange(order.id, field, e.target.checked)}
+        className={`h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ${
+          isModified ? 'ring-2 ring-yellow-400' : ''
+        }`}
       />
+    );
+  };
+
+  const EditableField = ({ order, field, className = "" }: { order: Order, field: keyof Order, className?: string }) => {
+    const isEditing = editingField?.orderId === order.id && editingField?.field === field;
+    const isModified = modifiedOrders[order.id]?.[field] !== undefined;
+    const currentValue = isModified 
+      ? (modifiedOrders[order.id]![field] as string) || '' 
+      : (order[field] as string) || '';
+
+    if (isEditing) {
+      return (
+        <input
+          type="text"
+          value={editValue || ''}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => handleFieldKeyPress(e, order.id, field)}
+          onBlur={() => handleFieldSave(order.id, field)}
+          className={`px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+          autoFocus
+        />
+      );
+    }
+
+    return (
+      <div 
+        className={`cursor-pointer hover:bg-blue-50 px-2 py-1 rounded transition-colors ${className} ${
+          isModified ? 'bg-yellow-50 border border-yellow-200' : ''
+        }`}
+        onClick={() => handleFieldEdit(order.id, field, currentValue)}
+        title="Click to edit"
+      >
+        {currentValue || '-'}
+      </div>
     );
   };
 
@@ -167,60 +326,63 @@ const OrdersTable: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-4">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input
-            placeholder="Search orders..."
-            value={filters.search}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-          />
-          <Input
-            placeholder="Customer name"
-            value={filters.customerName}
-            onChange={(e) => handleFilterChange('customerName', e.target.value)}
-          />
-          <Input
-            type="date"
-            placeholder="Order date"
-            value={filters.orderDate}
-            onChange={(e) => handleFilterChange('orderDate', e.target.value)}
-          />
-          <Input
-            placeholder="Order status"
-            value={filters.orderStatus}
-            onChange={(e) => handleFilterChange('orderStatus', e.target.value)}
-          />
-          <Input
-            placeholder="Order total"
-            value={filters.orderTotal}
-            onChange={(e) => handleFilterChange('orderTotal', e.target.value)}
-          />
-          <Input
-            placeholder="State"
-            value={filters.state}
-            onChange={(e) => handleFilterChange('state', e.target.value)}
-          />
-          <Input
-            placeholder="Payment mode"
-            value={filters.paymentMode}
-            onChange={(e) => handleFilterChange('paymentMode', e.target.value)}
-          />
-          <Button onClick={() => setFilters({
-            search: '', customerName: '', orderDate: '', orderStatus: '',
-            orderTotal: '', state: '', paymentMode: ''
-          })}>
-            Clear Filters
+      <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Filters</h2>
+          <Button onClick={() => setIsFilterModalOpen(true)}>
+            Open Filters
           </Button>
         </div>
-      </Card>
 
-      {/* Table */}
-      <Card className="overflow-x-auto">
-        <div className="min-w-full">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+      {/* Filter Modal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        onApply={handleApplyFilters}
+        onClear={handleClearFilters}
+        currentFilters={filters}
+        searchPlaceholder="Search orders..."
+        title="Order Filters"
+        filterFields={[
+          { key: 'customerName', label: 'Customer Name', placeholder: 'Filter by customer name' },
+          { key: 'orderDate', label: 'Order Date', type: 'date' },
+          { key: 'orderStatus', label: 'Order Status', placeholder: 'Filter by order status' },
+          { key: 'orderTotal', label: 'Order Total', type: 'number', placeholder: 'Filter by order total' },
+          { key: 'state', label: 'State', placeholder: 'Filter by state' },
+          { key: 'paymentMode', label: 'Payment Mode', placeholder: 'Filter by payment mode' }
+        ]}
+      />
+
+      {/* Table Container */}
+      <Card className="p-0">
+        {hasChanges && (
+          <div className="p-4 bg-yellow-50 border-b border-yellow-200">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-yellow-800">
+                You have unsaved changes. Click Save to update the records or Cancel to discard changes.
+              </span>
+              <div className="flex space-x-3">
+                <Button 
+                  onClick={handleCancelAllChanges}
+                  className="bg-gray-500 hover:bg-gray-600"
+                >
+                  Cancel Changes
+                </Button>
+                <Button 
+                  onClick={handleSaveChanges}
+                  className="bg-green-500 hover:bg-green-600"
+                >
+                  Save All Changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+                {/* Table with horizontal scroll */}
+        <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+          <div className="min-w-[2000px]"> {/* Set minimum width to accommodate all columns */}
+            <table className="w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('order_id')}>
                   Order ID {sortBy === 'order_id' && (sortOrder === 'ASC' ? '↑' : '↓')}
@@ -279,40 +441,40 @@ const OrdersTable: React.FC = () => {
                     {formatDate(order.date)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.customer_name}
+                    <EditableField order={order} field="customer_name" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.contact_no}
+                    <EditableField order={order} field="contact_no" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.email}
+                    <EditableField order={order} field="email" />
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                    {order.address}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.city}
+                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                    <EditableField order={order} field="address" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.country}
+                    <EditableField order={order} field="city" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.state}
+                    <EditableField order={order} field="country" />
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <EditableField order={order} field="state" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {order.item}
+                    <EditableField order={order} field="item" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.color1}
+                    <EditableField order={order} field="color1" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.color2}
+                    <EditableField order={order} field="color2" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.color3}
+                    <EditableField order={order} field="color3" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.size}
+                    <EditableField order={order} field="size" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {order.qty}
@@ -321,52 +483,52 @@ const OrdersTable: React.FC = () => {
                     ₹{order.amount || 0}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.payment_mode}
+                    <EditableField order={order} field="payment_mode" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.payment_received)}
+                    {formatBoolean(order, 'payment_received')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.order_confirmation}
+                    <EditableField order={order} field="order_confirmation" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.reason}
+                    <EditableField order={order} field="reason" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.process_order)}
+                    {formatBoolean(order, 'process_order')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.order_packed)}
+                    {formatBoolean(order, 'order_packed')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.order_cancelled)}
+                    {formatBoolean(order, 'order_cancelled')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.delivered)}
+                    {formatBoolean(order, 'delivered')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.is_rto)}
+                    {formatBoolean(order, 'is_rto')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.remarks}
+                    <EditableField order={order} field="remarks" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.rto_reason}
+                    <EditableField order={order} field="rto_reason" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.review_taken}
+                    <EditableField order={order} field="review_taken" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.customer_review}
+                    <EditableField order={order} field="customer_review" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.product_review}
+                    <EditableField order={order} field="product_review" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBoolean(order.is_return)}
+                    {formatBoolean(order, 'is_return')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.whatsapp_notification_failed_reason}
+                    <EditableField order={order} field="whatsapp_notification_failed_reason" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(order.created_at)}
@@ -375,14 +537,25 @@ const OrdersTable: React.FC = () => {
                     {formatDate(order.updated_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Button onClick={() => window.open(`/orders/${order.id}`, '_blank')}>
-                      View
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button onClick={() => window.open(`/orders/${order.id}`, '_blank')}>
+                        View
+                      </Button>
+                      {hasChanges && (
+                        <Button 
+                          onClick={handleSaveChanges}
+                          className="bg-green-500 hover:bg-green-600"
+                        >
+                          Save
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
         </div>
 
         {/* Pagination */}

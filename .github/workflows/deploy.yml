@@ -1,0 +1,56 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            # Navigate to application directory
+            cd milercustomerdata
+
+            # Pull latest changes
+            echo "📥 Pulling latest changes..."
+            git pull origin main
+
+            # Install dependencies
+            echo "📦 Installing dependencies..."
+            npm install
+
+            # Build the application
+            echo "🔨 Building application..."
+            npm run build
+
+            # Restart the application
+            echo "🔄 Restarting application..."
+            pm2 restart miler-customer-app
+
+            # Check status
+            echo "📊 Application status:"
+            pm2 status
+
+            echo "✅ Deployment completed successfully!"
+
+      - name: Health Check
+        run: |
+          # Wait a moment for the application to start
+          sleep 10
+
+          # Perform health check
+          curl -f http://${{ secrets.EC2_HOST }}/health || exit 1
+
+          echo "✅ Health check passed!"
