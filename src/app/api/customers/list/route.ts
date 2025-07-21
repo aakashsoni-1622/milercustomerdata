@@ -80,6 +80,8 @@ export async function GET(request: Request) {
       LEFT JOIN miler.orders o ON c.id = o.customer_id
       ${whereClause}
     `;
+    console.log("query", query);
+    console.log("countQuery", countQuery);
 
     const [result, countResult] = await Promise.all([
       pool.query(query, queryParams),
@@ -101,7 +103,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Error fetching customers:", error);
+    console.log("Error fetching customers:", error);
     return NextResponse.json(
       { error: "Failed to fetch customers" },
       { status: 500 }

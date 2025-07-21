@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const ordersData = await request.json();
     const results = [];
     const errors = [];
-
+    console.log("ordersData", ordersData);
     for (const orderData of ordersData) {
       const {
         order_id,
