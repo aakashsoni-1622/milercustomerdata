@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 
 export async function GET() {
   try {
-    const result = await pool.query(
+    const result = await query(
       "SELECT * FROM miler.orders ORDER BY created_at DESC"
     );
     return NextResponse.json(result.rows);
@@ -19,10 +19,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const orders = await request.json();
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
-      const results = [];
+
+    const results = await withTransaction(async (client) => {
+      const insertResults = [];
       for (const order of orders) {
         const {
           order_id,
@@ -51,16 +50,12 @@ export async function POST(request: Request) {
             customer_id,
           ]
         );
-        results.push(result.rows[0]);
+        insertResults.push(result.rows[0]);
       }
-      await client.query("COMMIT");
-      return NextResponse.json(results);
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+      return insertResults;
+    });
+
+    return NextResponse.json(results);
   } catch (error) {
     console.error("Error bulk inserting orders:", error);
     return NextResponse.json(

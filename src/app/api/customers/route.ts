@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { query } from "@/lib/db";
 
 export async function GET() {
   // TODO: Fetch customers from the database
@@ -9,7 +9,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { customer_name, contact_no, email } = await request.json();
-    const result = await pool.query(
+    const result = await query(
       "INSERT INTO customers (customer_name, contact_no, email) VALUES ($1, $2, $3) RETURNING *",
       [customer_name, contact_no, email]
     );

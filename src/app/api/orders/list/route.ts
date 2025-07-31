@@ -90,7 +90,7 @@ export async function GET(request: Request) {
         c.address,
         c.city,
         c.country
-      FROM miler.orders o
+      FROM miler.orders_new o
       LEFT JOIN miler.customers c ON o.customer_id = c.id
       ${whereClause}
       ${orderByClause}
