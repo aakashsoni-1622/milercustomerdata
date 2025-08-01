@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { UserRole } from '@/lib/auth';
 
 interface LoginFormData {
   username: string;
@@ -81,44 +80,7 @@ function LoginPageContent() {
     }
   };
 
-  const handleDemoLogin = async (role: UserRole) => {
-    setIsLoading(true);
-    setError('');
-
-    // Demo credentials (in production, these would be actual test accounts)
-    const demoCredentials = {
-      [UserRole.SUPER_ADMIN]: { username: 'superadmin', password: 'admin123' },
-      [UserRole.ADMIN]: { username: 'admin', password: 'admin123' },
-      [UserRole.OPERATIONS]: { username: 'operations', password: 'admin123' },
-      [UserRole.CUSTOMER_SUPPORT]: { username: 'support', password: 'admin123' },
-      [UserRole.VIEWER]: { username: 'viewer', password: 'admin123' },
-    };
-
-    const credentials = demoCredentials[role];
-    
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        router.push(redirectTo);
-      } else {
-        setError(`Demo login failed for ${role}: ${data.error}`);
-      }
-          } catch (err) {
-        console.error('Demo login error:', err);
-        setError('Demo login failed. Please try again.');
-      } finally {
-      setIsLoading(false);
-    }
-  };
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -207,57 +169,6 @@ function LoginPageContent() {
           </div>
         </form>
 
-        {/* Demo Login Buttons */}
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-50 text-gray-500">Demo Login</span>
-            </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => handleDemoLogin(UserRole.SUPER_ADMIN)}
-              disabled={isLoading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Super Admin
-            </button>
-            <button
-              onClick={() => handleDemoLogin(UserRole.ADMIN)}
-              disabled={isLoading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => handleDemoLogin(UserRole.OPERATIONS)}
-              disabled={isLoading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Operations
-            </button>
-            <button
-              onClick={() => handleDemoLogin(UserRole.CUSTOMER_SUPPORT)}
-              disabled={isLoading}
-              className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Support
-            </button>
-          </div>
-        </div>
-
-        {/* Default Credentials Info */}
-        <div className="mt-4 p-4 bg-blue-50 rounded-md">
-          <p className="text-sm text-blue-700">
-            <strong>Default Login:</strong><br />
-            Username: <code>superadmin</code><br />
-            Password: <code>admin123</code>
-          </p>
-        </div>
       </div>
     </div>
   );

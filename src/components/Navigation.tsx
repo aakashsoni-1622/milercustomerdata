@@ -51,6 +51,12 @@ const Navigation = () => {
         href: '/add-bulk-orders',
         icon: '📝',
         roles: [UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
+      },
+      {
+        name: 'Users',
+        href: '/users',
+        icon: '👤',
+        roles: [UserRole.ADMIN, UserRole.SUPER_ADMIN]
       }
     ];
 
