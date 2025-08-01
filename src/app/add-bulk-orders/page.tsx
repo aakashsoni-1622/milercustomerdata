@@ -48,7 +48,7 @@ const states = [
 ];
 
 const paymentModes = ["PAID", "COD"];
-const orderConfirmations = ["Confirmed", "Pending", "Cancelled"];
+// const orderConfirmations = ["Confirmed", "Pending", "Cancelled"];
 
 export default function BulkOrdersPage() {
   const router = useRouter();
@@ -125,11 +125,7 @@ export default function BulkOrdersPage() {
     ));
   };
 
-  const calculateOrderTotal = (selectedProducts: SelectedProduct[]) => {
-    return selectedProducts.reduce((total, product) => 
-      total + (product.quantity * product.unitPrice), 0
-    );
-  };
+  // Removed auto-calculation - total amount is now user input only
 
   const handleProductSelection = (orderRowId: string) => {
     setEditingOrderId(orderRowId);
@@ -138,13 +134,12 @@ export default function BulkOrdersPage() {
 
   const handleProductsSelected = (selectedProducts: SelectedProduct[]) => {
     if (editingOrderId) {
-      const totalAmount = calculateOrderTotal(selectedProducts);
       setOrders(prev => prev.map(order => 
         order.id === editingOrderId 
           ? { 
               ...order, 
-              selectedProducts: selectedProducts,
-              totalAmount: totalAmount
+              selectedProducts: selectedProducts
+              // totalAmount remains as user input - not auto-calculated
             }
           : order
       ));
@@ -164,7 +159,7 @@ export default function BulkOrdersPage() {
     try {
       // Filter out empty rows and validate
       const validOrders = orders.filter(order => 
-        order.orderId && order.customerName && order.contactNo && order.selectedProducts.length > 0
+        order.orderId && order.customerName && order.contactNo && order.selectedProducts.length > 0 && order.totalAmount > 0
       );
 
       if (validOrders.length === 0) {
@@ -173,8 +168,8 @@ export default function BulkOrdersPage() {
 
       // Validate each order
       for (const order of validOrders) {
-        if (!order.orderId || !order.customerName || !order.contactNo || !order.state || !order.paymentMode || !order.orderConfirmation) {
-          throw new Error(`Please fill all required fields for order ${order.orderId}`);
+        if (!order.orderId || !order.customerName || !order.contactNo || !order.state || !order.paymentMode || !order.totalAmount) {
+          throw new Error(`Please fill all required fields including Total Amount for order ${order.orderId}`);
         }
         
         if (order.selectedProducts.length === 0) {
@@ -217,7 +212,7 @@ export default function BulkOrdersPage() {
             customerName: order.customerName,
             contactNo: order.contactNo,
             orderItems: orderItems,
-            totalAmount: order.totalAmount || calculateOrderTotal(order.selectedProducts),
+            totalAmount: order.totalAmount,
             paymentMode: order.paymentMode,
             orderConfirmation: order.orderConfirmation,
             comments: order.comments,
@@ -308,17 +303,11 @@ export default function BulkOrdersPage() {
                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                      Products *
                    </th>
-                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                     Total Amount
-                   </th>
+                                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Total Amount *
+                  </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Payment *
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status *
-                  </th>
-                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Comments
                   </th>
                   <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -431,11 +420,12 @@ export default function BulkOrdersPage() {
                      <td className="px-3 py-4 whitespace-nowrap">
                        <input
                          type="number"
-                         value={order.totalAmount || calculateOrderTotal(order.selectedProducts)}
+                         value={order.totalAmount || ''}
                          onChange={(e) => updateOrderField(order.id, 'totalAmount', parseFloat(e.target.value) || 0)}
                          min="0"
                          step="0.01"
-                         placeholder="Auto-calculated"
+                         placeholder="Enter amount"
+                         required
                          className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                        />
                      </td>
@@ -452,31 +442,6 @@ export default function BulkOrdersPage() {
                             <option key={mode} value={mode}>{mode}</option>
                           ))}
                         </select>
-                      </td>
-                      
-                      {/* Order Confirmation */}
-                      <td className="px-3 py-4 whitespace-nowrap">
-                        <select
-                          value={order.orderConfirmation}
-                          onChange={(e) => updateOrderField(order.id, 'orderConfirmation', e.target.value)}
-                          className="w-28 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="">Select</option>
-                          {orderConfirmations.map(status => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                      </td>
-                      
-                      {/* Comments */}
-                      <td className="px-3 py-4">
-                        <input
-                          type="text"
-                          value={order.comments}
-                          onChange={(e) => updateOrderField(order.id, 'comments', e.target.value)}
-                          placeholder="Comments"
-                          className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
                       </td>
                       
                       {/* Actions */}
@@ -515,7 +480,7 @@ export default function BulkOrdersPage() {
               </p>
               <p className="text-sm text-gray-600">
                 Valid Orders: <span className="font-medium">
-                  {orders.filter(order => order.orderId && order.customerName && order.contactNo && order.selectedProducts.length > 0).length}
+                  {orders.filter(order => order.orderId && order.customerName && order.contactNo && order.selectedProducts.length > 0 && order.totalAmount > 0).length}
                 </span>
               </p>
               <p className="text-sm text-gray-600">

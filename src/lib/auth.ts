@@ -79,13 +79,31 @@ export async function verifyJWT(token: string): Promise<JWTPayload | null> {
 
 // Session management (server-side functions moved to auth-server.ts)
 
-// Get current user from request (for middleware only)
+// Get current user from request (supports both cookies and headers)
 export async function getCurrentUser(
   request: NextRequest
 ): Promise<User | null> {
   try {
-    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value || null;
+    // Try to get token from multiple sources
+    let token: string | null = null;
 
+    // 1. First try Authorization header (Bearer token)
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7); // Remove "Bearer " prefix
+    }
+
+    // 2. If no Bearer token, try custom X-Auth-Token header
+    if (!token) {
+      token = request.headers.get("x-auth-token");
+    }
+
+    // 3. If no header token, try cookie (for web app)
+    if (!token) {
+      token = request.cookies.get(SESSION_COOKIE_NAME)?.value || null;
+    }
+
+    // 4. If still no token found, return null
     if (!token) {
       return null;
     }
@@ -137,7 +155,12 @@ export function checkPermissions(
 }
 
 // Route protection utilities
-export const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/health/db"];
+export const PUBLIC_ROUTES = [
+  "/login",
+  "/api/auth/login",
+  "/api/health/db",
+  "/api/orders/bulk-insert",
+];
 export const PROTECTED_ROUTES = [
   "/",
   "/orders",
