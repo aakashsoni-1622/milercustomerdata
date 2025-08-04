@@ -160,6 +160,7 @@ export const PUBLIC_ROUTES = [
   "/api/auth/login",
   "/api/health/db",
   "/api/orders/bulk-insert",
+  "/api/orders/create-v2",
 ];
 export const PROTECTED_ROUTES = [
   "/",

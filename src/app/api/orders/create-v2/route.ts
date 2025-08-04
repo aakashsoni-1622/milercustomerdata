@@ -1,53 +1,48 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
-
-interface OrderItem {
-  productId: number;
-  selectedColors: string[];
-  selectedSizes: string[];
-  quantity: number;
-  unitPrice?: number;
-}
-
-interface OrderData {
-  orderId: string;
-  customerName: string;
-  contactNo: string;
-  date: string;
-  state: string;
-  orderItems: OrderItem[];
-  paymentMode: string;
-  orderConfirmation: string;
-  comments?: string;
-  processOrder?: boolean;
-  orderStatus?: string;
-}
+import { LineItem, ShopifyOrder } from "@/app/interface/shopifyWebhook";
 
 export async function POST(request: Request) {
   try {
-    const data: OrderData = await request.json();
+    const data: ShopifyOrder = await request.json();
 
-    const {
-      orderId,
-      customerName,
-      contactNo,
-      date,
-      state,
-      orderItems,
-      paymentMode,
-      orderConfirmation,
-      comments,
-      processOrder,
-      orderStatus,
-    } = data;
+    const variables = {
+      orderId: data.order_number,
+      customerName: data.customer.first_name,
+      contactNo: data.phone || data.billing_address.phone,
+      date: data.created_at,
+      state: data.customer.state || data.customer.default_address.province,
+      orderItems: data.line_items.map((ele: LineItem) => {
+        return {
+          productCode: ele?.sku?.includes("MTRA04")
+            ? "MTRA04"
+            : ele?.sku?.includes("MTSH09")
+            ? "MTSH09"
+            : ele?.sku?.includes("MTSH06")
+            ? "MTSH06"
+            : ele?.sku?.includes("MPYJ02")
+            ? "MPYJ02"
+            : ele?.sku?.includes("MSHR05")
+            ? "MSHR05"
+            : "",
+          selectedColors: ele.variant_title.split("/")[0],
+          selectedSizes: ele.variant_title.split("/")[1],
+          totalPrice: ele.price,
+        };
+      }),
+      paymentMode:
+        data.payment_gateway_names[0] === "cash_on_delivery" ? "COD" : "PAID",
+      comments: data.note,
+      orderStatus: data.fulfillment_status,
+    };
 
     // Validate required fields
     if (
-      !orderId ||
-      !customerName ||
-      !contactNo ||
-      !orderItems ||
-      orderItems.length === 0
+      !variables.orderId ||
+      !variables.customerName ||
+      !variables.contactNo ||
+      !variables.orderItems ||
+      variables.orderItems.length === 0
     ) {
       return NextResponse.json(
         {
@@ -68,7 +63,7 @@ export async function POST(request: Request) {
 
       const existingCustomer = await client.query(
         "SELECT id FROM miler.customers WHERE contact_no = $1",
-        [contactNo]
+        [variables.contactNo]
       );
 
       if (existingCustomer.rows.length > 0) {
@@ -76,62 +71,60 @@ export async function POST(request: Request) {
       } else {
         const newCustomer = await client.query(
           "INSERT INTO miler.customers (customer_name, contact_no, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id",
-          [customerName, contactNo]
+          [variables.customerName, variables.contactNo]
         );
         customerId = newCustomer.rows[0].id;
       }
 
       // 2. Calculate total amount and validate products
-      let totalAmount = 0;
+      const totalAmount = data.total_price;
       const validatedOrderItems = [];
 
-      for (const item of orderItems) {
+      for (const item of variables.orderItems) {
         // Get product details
         const productResult = await client.query(
-          "SELECT id, base_price, available_colors, available_sizes FROM miler.products WHERE id = $1 AND is_active = true",
-          [item.productId]
+          "SELECT id, base_price, available_colors, available_sizes FROM miler.products WHERE product_code = $1 AND is_active = true",
+          [item.productCode]
         );
 
         if (productResult.rows.length === 0) {
           throw new Error(
-            `Product with ID ${item.productId} not found or inactive`
+            `Product with ID ${item.productCode} not found or inactive`
           );
         }
 
-        const product = productResult.rows[0];
-        const unitPrice = item.unitPrice || product.base_price || 0;
-        const itemTotal = unitPrice * item.quantity;
-
-        totalAmount += itemTotal;
-
         validatedOrderItems.push({
           ...item,
-          unitPrice,
-          totalPrice: itemTotal,
+          productId: productResult.rows[0].id,
+          selectedColors: [item.selectedColors.trim()],
+          selectedSizes: [item.selectedSizes.trim()],
+          quantity: data.line_items.find((ele: LineItem) =>
+            ele.sku.includes(item.productCode)
+          )?.quantity,
+          unitPrice: productResult.rows[0].base_price,
+          totalPrice: item.totalPrice,
         });
       }
-
       // 3. Create order
       const orderResult = await client.query(
         `
         INSERT INTO miler.orders_new (
           order_id, customer_id, order_date, state, total_amount,
           payment_mode, order_confirmation, order_status, comments,
-          process_order, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
         RETURNING id
       `,
         [
-          orderId,
+          variables.orderId,
           customerId,
-          date,
-          state,
+          variables.date,
+          variables.state,
           totalAmount,
-          paymentMode,
-          orderConfirmation,
-          orderStatus || "New",
-          comments || "",
-          processOrder || false,
+          variables.paymentMode,
+          variables.orderStatus || "New",
+          variables.comments || "",
+          false,
         ]
       );
 
@@ -193,13 +186,14 @@ export async function POST(request: Request) {
       `,
         [newOrderId]
       );
-
+      console.log(completeOrderResult.rows[0]);
       return NextResponse.json({
         success: true,
         order: completeOrderResult.rows[0],
         message: "Order created successfully",
       });
     } catch (error) {
+      console.log(error);
       await client.query("ROLLBACK");
       throw error;
     } finally {
