@@ -47,6 +47,11 @@ const BulkProductSelectionModal: React.FC<BulkProductSelectionModalProps> = ({
   const colorDropdownRef = useRef<HTMLDivElement>(null);
   const sizeDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Update selectedProducts when existingProducts prop changes
+  useEffect(() => {
+    setSelectedProducts(existingProducts);
+  }, [existingProducts]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

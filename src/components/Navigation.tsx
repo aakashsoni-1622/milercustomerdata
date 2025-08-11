@@ -23,12 +23,6 @@ const Navigation = () => {
         roles: [UserRole.VIEWER, UserRole.CUSTOMER_SUPPORT, UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
       },
       {
-        name: 'Orders',
-        href: '/orders',
-        icon: '📋',
-        roles: [UserRole.VIEWER, UserRole.CUSTOMER_SUPPORT, UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
-      },
-      {
         name: 'Customers',
         href: '/customers',
         icon: '👥',
@@ -40,17 +34,23 @@ const Navigation = () => {
         icon: '📦',
         roles: [UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
       },
-      {
-        name: 'Add Order',
-        href: '/add-order-v2',
-        icon: '➕',
-        roles: [UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
-      },
+      // {
+      //   name: 'Add Order',
+      //   href: '/add-order-v2',
+      //   icon: '➕',
+      //   roles: [UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
+      // },
       {
         name: 'Bulk Orders',
         href: '/add-bulk-orders',
         icon: '📝',
-        roles: [UserRole.OPERATIONS, UserRole.ADMIN, UserRole.SUPER_ADMIN]
+        roles: [UserRole.CUSTOMER_SUPPORT, UserRole.ADMIN, UserRole.SUPER_ADMIN]
+      },
+      {
+        name: 'Orders Management',
+        href: '/orders-management',
+        icon: '✏️',
+        roles: [UserRole.CUSTOMER_SUPPORT, UserRole.ADMIN, UserRole.SUPER_ADMIN]
       },
       {
         name: 'Users',
