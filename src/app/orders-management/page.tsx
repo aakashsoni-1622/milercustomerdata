@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import BulkProductSelectionModal from "@/components/ui/BulkProductSelectionModal";
+import OrderDetailsPopup from "@/components/ui/OrderDetailsPopup";
+import RtoDetailsPopup from "@/components/ui/RtoDetailsPopup";
+import ReturnDetailsPopup from "@/components/ui/ReturnDetailsPopup";
 import { useAuth } from "@/components/AuthProvider";
 import { UserRole } from "@/lib/auth";
 
@@ -48,10 +51,19 @@ interface OrderRow {
   delivered?: boolean;
   isRto?: boolean;
   rtoReason?: string;
+  rtoReceived?: boolean;
+  damaged?: boolean;
   reviewTaken?: string;
   customerReview?: string;
   productReview?: string;
   isReturn?: boolean;
+  returnReason?: string;
+  returnInitiated?: boolean;
+  returnPicked?: boolean;
+  returnDelivered?: boolean;
+  shippingAdjustment?: string;
+  payableAmount?: string;
+  returnStatus?: string;
   whatsappNotificationFailedReason?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -77,10 +89,19 @@ interface ApiOrder {
   delivered?: boolean;
   is_rto?: boolean;
   rto_reason?: string;
+  rto_received?: boolean;
+  damaged?: boolean;
   review_taken?: string;
   customer_review?: string;
   product_review?: string;
   is_return?: boolean;
+  return_reason?: string;
+  return_initiated?: boolean;
+  return_picked?: boolean;
+  return_delivered?: boolean;
+  shipping_adjustment?: string;
+  payable_amount?: string;
+  return_status?: string;
   whatsapp_notification_failed_reason?: string;
   created_at?: string;
   updated_at?: string;
@@ -115,6 +136,8 @@ const orderStatuses = ["New", "Processing", "Shipped", "Delivered", "Cancelled",
 const orderConfirmations = ["YES", "NOT REQUIRED", "COULDNOT CONNECT", "CANCELLED"];
 const pageSizeOptions = [10, 25, 50, 100];
 
+
+
 export default function OrdersManagementPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -133,6 +156,45 @@ export default function OrdersManagementPage() {
   });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const { user } = useAuth();
+  
+  // Add state for popup
+  const [popupState, setPopupState] = useState<{
+    isVisible: boolean;
+    orderId: string | null;
+    position: { x: number; y: number } | null;
+    isHoveringPopup: boolean;
+  }>({
+    isVisible: false,
+    orderId: null,
+    position: null,
+    isHoveringPopup: false
+  });
+
+  // Add state for RTO popup
+  const [rtoPopupState, setRtoPopupState] = useState<{
+    isVisible: boolean;
+    orderId: string | null;
+    position: { x: number; y: number } | null;
+    isHoveringPopup: boolean;
+  }>({
+    isVisible: false,
+    orderId: null,
+    position: null,
+    isHoveringPopup: false
+  });
+
+  // Add state for Return popup
+  const [returnPopupState, setReturnPopupState] = useState<{
+    isVisible: boolean;
+    orderId: string | null;
+    position: { x: number; y: number } | null;
+    isHoveringPopup: boolean;
+  }>({
+    isVisible: false,
+    orderId: null,
+    position: null,
+    isHoveringPopup: false
+  });
 
   // Fetch products on component mount
   useEffect(() => {
@@ -222,10 +284,19 @@ export default function OrdersManagementPage() {
           delivered: order.delivered,
           isRto: order.is_rto,
           rtoReason: order.rto_reason,
+          rtoReceived: order.rto_received,
+          damaged: order.damaged,
           reviewTaken: order.review_taken,
           customerReview: order.customer_review,
           productReview: order.product_review,
           isReturn: order.is_return,
+          returnReason: order.return_reason,
+          returnInitiated: order.return_initiated,
+          returnPicked: order.return_picked,
+          returnDelivered: order.return_delivered,
+          shippingAdjustment: order.shipping_adjustment,
+          payableAmount: order.payable_amount,
+          returnStatus: order.return_status,
           whatsappNotificationFailedReason: order.whatsapp_notification_failed_reason,
           createdAt: order.created_at,
           updatedAt: order.updated_at,
@@ -317,10 +388,19 @@ export default function OrdersManagementPage() {
           delivered: order.delivered,
           isRto: order.is_rto,
           rtoReason: order.rto_reason,
+          rtoReceived: order.rto_received,
+          damaged: order.damaged,
           reviewTaken: order.review_taken,
           customerReview: order.customer_review,
           productReview: order.product_review,
           isReturn: order.is_return,
+          returnReason: order.return_reason,
+          returnInitiated: order.return_initiated,
+          returnPicked: order.return_picked,
+          returnDelivered: order.return_delivered,
+          shippingAdjustment: order.shipping_adjustment,
+          payableAmount: order.payable_amount,
+          returnStatus: order.return_status,
           whatsappNotificationFailedReason: order.whatsapp_notification_failed_reason,
           createdAt: order.created_at,
           updatedAt: order.updated_at,
@@ -536,6 +616,193 @@ export default function OrdersManagementPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Add handlers for popup
+  const handleRowMouseEnter = (event: React.MouseEvent, order: OrderRow) => {
+    if (order.orderStatus === 'Delivered') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setPopupState({
+        isVisible: true,
+        orderId: order.id,
+        position: { x: rect.left, y: rect.top },
+        isHoveringPopup: false
+      });
+    } else if (order.orderStatus === 'RTO') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setRtoPopupState({
+        isVisible: true,
+        orderId: order.id,
+        position: { x: rect.left, y: rect.top },
+        isHoveringPopup: false
+      });
+    } else if (order.orderStatus === 'Return') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setReturnPopupState({
+        isVisible: true,
+        orderId: order.id,
+        position: { x: rect.left, y: rect.top },
+        isHoveringPopup: false
+      });
+    }
+  };
+
+  const handleRowMouseLeave = () => {
+    // Add a delay before closing to allow moving to popup
+    setTimeout(() => {
+      setPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+      
+      setRtoPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+
+      setReturnPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+    }, 150); // Increased delay to 150ms
+  };
+
+  const handlePopupClose = () => {
+    setPopupState({
+      isVisible: false,
+      orderId: null,
+      position: null,
+      isHoveringPopup: false
+    });
+  };
+
+  const handleRtoPopupClose = () => {
+    setRtoPopupState({
+      isVisible: false,
+      orderId: null,
+      position: null,
+      isHoveringPopup: false
+    });
+  };
+
+  const handleReturnPopupClose = () => {
+    setReturnPopupState({
+      isVisible: false,
+      orderId: null,
+      position: null,
+      isHoveringPopup: false
+    });
+  };
+
+  const handlePopupMouseEnter = () => {
+    setPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: true
+    }));
+  };
+
+  const handlePopupMouseLeave = () => {
+    setPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: false
+    }));
+    // Close the popup after a longer delay if not hovering over it
+    setTimeout(() => {
+      setPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+    }, 300); // Increased delay to 300ms
+  };
+
+  const handleRtoPopupMouseEnter = () => {
+    setRtoPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: true
+    }));
+  };
+
+  const handleRtoPopupMouseLeave = () => {
+    setRtoPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: false
+    }));
+    // Close the RTO popup after a longer delay if not hovering over it
+    setTimeout(() => {
+      setRtoPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+    }, 300); // Increased delay to 300ms
+  };
+
+  const handleReturnPopupMouseEnter = () => {
+    setReturnPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: true
+    }));
+  };
+
+  const handleReturnPopupMouseLeave = () => {
+    setReturnPopupState(prev => ({
+      ...prev,
+      isHoveringPopup: false
+    }));
+    // Close the return popup after a longer delay if not hovering over it
+    setTimeout(() => {
+      setReturnPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+    }, 300); // Increased delay to 300ms
+  };
+
+  const handlePopupUpdate = (updatedOrder: OrderRow) => {
+    setOrders(prev => prev.map(order => 
+      order.id === updatedOrder.id ? updatedOrder : order
+    ));
   };
 
   if (loading) {
@@ -796,7 +1063,10 @@ export default function OrdersManagementPage() {
                     // }
                     
                     return (
-                      <tr key={order.id} className={rowColorClass}>
+                      <tr 
+                        key={order.id} 
+                        className={rowColorClass}
+                      >
                       <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">
                         {((pagination.currentPage - 1) * pagination.pageSize) + index + 1}
                       </td>
@@ -865,15 +1135,20 @@ export default function OrdersManagementPage() {
                           
                           {/* Status */}
                           <td className="px-3 py-4 whitespace-nowrap">
-                            <select
-                              value={order.orderStatus}
-                              onChange={(e) => updateOrderField(order.id, 'orderStatus', e.target.value)}
-                              className="w-28 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            <div
+                              onMouseEnter={(e) => handleRowMouseEnter(e, order)}
+                              onMouseLeave={handleRowMouseLeave}
                             >
-                              {orderStatuses.map(status => (
-                                <option key={status} value={status}>{status}</option>
-                              ))}
-                            </select>
+                              <select
+                                value={order.orderStatus}
+                                onChange={(e) => updateOrderField(order.id, 'orderStatus', e.target.value)}
+                                className="w-28 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {orderStatuses.map(status => (
+                                  <option key={status} value={status}>{status}</option>
+                                ))}
+                              </select>
+                            </div>
                           </td>
                         </>
                       ) : (
@@ -1005,15 +1280,20 @@ export default function OrdersManagementPage() {
                           
                           {/* Order Status */}
                           <td className="px-3 py-4 whitespace-nowrap">
-                            <select
-                              value={order.orderStatus}
-                              onChange={(e) => updateOrderField(order.id, 'orderStatus', e.target.value)}
-                              className="w-28 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            <div
+                              onMouseEnter={(e) => handleRowMouseEnter(e, order)}
+                              onMouseLeave={handleRowMouseLeave}
                             >
-                              {orderStatuses.map(status => (
-                                <option key={status} value={status}>{status}</option>
-                              ))}
-                            </select>
+                              <select
+                                value={order.orderStatus}
+                                onChange={(e) => updateOrderField(order.id, 'orderStatus', e.target.value)}
+                                className="w-28 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {orderStatuses.map(status => (
+                                  <option key={status} value={status}>{status}</option>
+                                ))}
+                              </select>
+                            </div>
                           </td>
                         </>
                       )}
@@ -1250,6 +1530,45 @@ export default function OrdersManagementPage() {
             <p className="text-gray-500">No orders found.</p>
             <p className="text-sm text-gray-400 mt-2">Orders will appear here once they are available.</p>
           </div>
+        )}
+
+        {/* Order Details Popup */}
+        {popupState.orderId && (
+          <OrderDetailsPopup
+            order={orders.find(o => o.id === popupState.orderId)!}
+            isVisible={popupState.isVisible}
+            position={popupState.position}
+            onClose={handlePopupClose}
+            onUpdate={handlePopupUpdate}
+            onMouseEnter={handlePopupMouseEnter}
+            onMouseLeave={handlePopupMouseLeave}
+          />
+        )}
+
+        {/* RTO Details Popup */}
+        {rtoPopupState.orderId && (
+          <RtoDetailsPopup
+            order={orders.find(o => o.id === rtoPopupState.orderId)!}
+            isVisible={rtoPopupState.isVisible}
+            position={rtoPopupState.position}
+            onClose={handleRtoPopupClose}
+            onUpdate={handlePopupUpdate}
+            onMouseEnter={handleRtoPopupMouseEnter}
+            onMouseLeave={handleRtoPopupMouseLeave}
+          />
+        )}
+
+        {/* Return Details Popup */}
+        {returnPopupState.orderId && (
+          <ReturnDetailsPopup
+            order={orders.find(o => o.id === returnPopupState.orderId)!}
+            isVisible={returnPopupState.isVisible}
+            position={returnPopupState.position}
+            onClose={handleReturnPopupClose}
+            onUpdate={handlePopupUpdate}
+            onMouseEnter={handleReturnPopupMouseEnter}
+            onMouseLeave={handleReturnPopupMouseLeave}
+          />
         )}
       </div>
     </div>
