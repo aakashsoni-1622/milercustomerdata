@@ -1,4 +1,4 @@
-import { ALL_CUSTOMERS } from "@/app/api/customers/route";
+import { ALL_CUSTOMERS } from "./customers-data";
 import {
   createOrUpdateOrder,
   prepareCustomShopifyOrderData,

@@ -1,4 +1,4 @@
-import { ALL_CUSTOMERS } from "@/app/api/customers/route";
+import { ALL_CUSTOMERS } from "@/lib/customers-data";
 import { prisma } from "./prisma";
 import type { ShopifyOrder, LineItem, SimpleOrderItem } from "@/types/shopify";
 import { shopifyApi } from "./shopify-api";
