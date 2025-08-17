@@ -63,7 +63,8 @@ model Order {
   state                               String?
   total_amount                        Decimal?
   payment_mode                        String?
-  payment_received                    Boolean   @default(false)
+  process_order                       Boolean   @default(false)
+  order_packed                        Boolean   @default(false)
   order_confirmation                  String?
   order_status                        String    @default("New")
   comments                            String?
@@ -80,6 +81,7 @@ model Order {
   shipping_adjustment                 String?
   payable_amount                      String?
   return_status                       String?
+  exchange_status                     String?
   whatsapp_notification_failed_reason String?
   meta_data                           Json?
   created_at                          DateTime  @default(now())

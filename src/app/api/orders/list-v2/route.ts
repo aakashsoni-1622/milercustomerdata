@@ -29,7 +29,7 @@ export async function GET(request: Request) {
             customer_name: { contains: search, mode: "insensitive" },
           },
         },
-        { customer: { contact_no: { equals: parseFloat(search) || 0 } } },
+        { customer: { contact_no: { contains: search, mode: "insensitive" } } },
       ];
     }
 
@@ -143,6 +143,8 @@ export async function GET(request: Request) {
       payment_received: order.payment_received,
       order_confirmation: order.order_confirmation,
       order_status: order.order_status,
+      process_order: order.process_order,
+      order_packed: order.order_packed,
       comments: order.comments,
       rto_received: order.rto_received,
       damaged: order.damaged,
@@ -156,6 +158,7 @@ export async function GET(request: Request) {
       return_delivered: order.return_delivered,
       shipping_adjustment: order.shipping_adjustment,
       return_status: order.return_status,
+      exchange_status: order.exchange_status,
       whatsapp_notification_failed_reason:
         order.whatsapp_notification_failed_reason,
       meta_data: order.meta_data,

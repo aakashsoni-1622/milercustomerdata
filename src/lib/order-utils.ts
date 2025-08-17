@@ -18,7 +18,8 @@ interface OrderVariables {
   orderConfirmation?: string;
   comments?: string;
   orderStatus?: string;
-  paymentReceived?: boolean;
+  processOrder?: boolean;
+  orderPacked?: boolean;
   rtoReceived?: boolean;
   damaged?: boolean;
   reviewTaken?: string;
@@ -31,6 +32,7 @@ interface OrderVariables {
   returnDelivered?: boolean;
   shippingAdjustment?: string;
   returnStatus?: string;
+  exchangeStatus?: string;
   whatsappNotificationFailedReason?: string;
   meta_data?: any;
   email?: string;
@@ -125,7 +127,6 @@ export async function createOrUpdateOrder(
         })
       );
     }
-
     // 3. Check if order already exists
     const existingOrder = await prisma.order.findUnique({
       where: { order_id: variables.orderId },
@@ -150,7 +151,8 @@ export async function createOrUpdateOrder(
           order_confirmation: variables.orderConfirmation || "",
           order_status: variables.orderStatus || "New",
           comments: variables.comments || "",
-          payment_received: variables.paymentReceived || false,
+          process_order: variables.processOrder || false,
+          order_packed: variables.orderPacked || false,
           rto_received: variables.rtoReceived || false,
           damaged: variables.damaged || false,
           review_taken: variables.reviewTaken || "",
@@ -163,6 +165,7 @@ export async function createOrUpdateOrder(
           return_delivered: variables.returnDelivered || false,
           shipping_adjustment: variables.shippingAdjustment || "",
           return_status: variables.returnStatus || "",
+          exchange_status: variables.exchangeStatus || "",
           whatsapp_notification_failed_reason:
             variables.whatsappNotificationFailedReason || "",
           meta_data: (variables.meta_data as object) || {},
@@ -188,7 +191,8 @@ export async function createOrUpdateOrder(
           order_confirmation: variables.orderConfirmation || "",
           order_status: variables.orderStatus || "New",
           comments: variables.comments || "",
-          payment_received: variables.paymentReceived || false,
+          process_order: variables.processOrder || false,
+          order_packed: variables.orderPacked || false,
           rto_received: variables.rtoReceived || false,
           damaged: variables.damaged || false,
           review_taken: variables.reviewTaken || "",
@@ -201,6 +205,7 @@ export async function createOrUpdateOrder(
           return_delivered: variables.returnDelivered || false,
           shipping_adjustment: variables.shippingAdjustment || "",
           return_status: variables.returnStatus || "",
+          exchange_status: variables.exchangeStatus || "",
           whatsapp_notification_failed_reason:
             variables.whatsappNotificationFailedReason || "",
           meta_data: (variables.meta_data as object) || {},
@@ -374,7 +379,8 @@ export function prepareSimpleOrderData(data: any): OrderVariables {
     comments: data.comments || "",
     orderStatus: data.orderStatus || "New",
     // Additional fields for admin/super admin
-    paymentReceived: data.paymentReceived || false,
+    processOrder: data.processOrder || false,
+    orderPacked: data.orderPacked || false,
     rtoReceived: data.rtoReceived || false,
     damaged: data.damaged || false,
     reviewTaken: data.reviewTaken || "",
@@ -387,6 +393,7 @@ export function prepareSimpleOrderData(data: any): OrderVariables {
     returnDelivered: data.returnDelivered || false,
     shippingAdjustment: data.shippingAdjustment || "",
     returnStatus: data.returnStatus || "",
+    exchangeStatus: data.exchangeStatus || "",
     whatsappNotificationFailedReason:
       data.whatsappNotificationFailedReason || "",
   };

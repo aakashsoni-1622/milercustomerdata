@@ -6,6 +6,7 @@ import BulkProductSelectionModal from "@/components/ui/BulkProductSelectionModal
 import OrderDetailsPopup from "@/components/ui/OrderDetailsPopup";
 import RtoDetailsPopup from "@/components/ui/RtoDetailsPopup";
 import ReturnDetailsPopup from "@/components/ui/ReturnDetailsPopup";
+import ExchangeDetailsPopup from "@/components/ui/ExchangeDetailsPopup";
 import { useAuth } from "@/components/AuthProvider";
 import { UserRole } from "@/lib/auth";
 
@@ -44,7 +45,8 @@ interface OrderRow {
   orderStatus: string;
   isModified: boolean;
   // Additional fields for admin/super admin
-  paymentReceived?: boolean;
+  processOrder?: boolean;
+  orderPacked?: boolean;
   rtoReceived?: boolean;
   damaged?: boolean;
   reviewTaken?: string;
@@ -58,6 +60,7 @@ interface OrderRow {
   shippingAdjustment?: string;
   payableAmount?: string;
   returnStatus?: string;
+  exchangeStatus?: string;
   whatsappNotificationFailedReason?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -75,8 +78,9 @@ interface ApiOrder {
   comments: string;
   customer_name: string;
   contact_no: string;
+  process_order?: boolean;
+  order_packed?: boolean;
   // Additional fields from orders_new table
-  payment_received?: boolean;
   rto_received?: boolean;
   damaged?: boolean;
   review_taken?: string;
@@ -90,6 +94,7 @@ interface ApiOrder {
   shipping_adjustment?: string;
   payable_amount?: string;
   return_status?: string;
+  exchange_status?: string;
   whatsapp_notification_failed_reason?: string;
   created_at?: string;
   updated_at?: string;
@@ -186,6 +191,19 @@ export default function OrdersManagementPage() {
     isHoveringPopup: false
   });
 
+  // Add state for Exchange popup
+  const [exchangePopupState, setExchangePopupState] = useState<{
+    isVisible: boolean;
+    orderId: string | null;
+    position: { x: number; y: number } | null;
+    isHoveringPopup: boolean;
+  }>({
+    isVisible: false,
+    orderId: null,
+    position: null,
+    isHoveringPopup: false
+  });
+
   // Fetch products on component mount
   useEffect(() => {
     fetchProducts();
@@ -262,12 +280,13 @@ export default function OrdersManagementPage() {
           })) : [],
           totalAmount: order.total_amount || 0,
           paymentMode: order.payment_mode || "",
+          processOrder: order.process_order || false,
+          orderPacked: order.order_packed || false,
           orderConfirmation: order.order_confirmation ? "Confirmed" : "Pending",
           comments: order.comments || "",
           orderStatus: order.order_status || "New",
           isModified: false,
           // Map additional fields from API to new interface
-          paymentReceived: order.payment_received,
           rtoReceived: order.rto_received,
           damaged: order.damaged,
           reviewTaken: order.review_taken,
@@ -281,6 +300,7 @@ export default function OrdersManagementPage() {
           shippingAdjustment: order.shipping_adjustment,
           payableAmount: order.payable_amount,
           returnStatus: order.return_status,
+          exchangeStatus: order.exchange_status,
           whatsappNotificationFailedReason: order.whatsapp_notification_failed_reason,
           createdAt: order.created_at,
           updatedAt: order.updated_at,
@@ -290,8 +310,8 @@ export default function OrdersManagementPage() {
         // Update pagination info
         setPagination(prev => ({
           ...prev,
-          totalPages: result.totalPages || 1,
-          totalOrders: result.totalOrders || result.orders.length
+          totalPages: result.pagination?.totalPages || 1,
+          totalOrders: result.pagination?.total || result.orders.length
         }));
       } else {
         console.error('Failed to fetch orders:', result.error);
@@ -365,7 +385,6 @@ export default function OrdersManagementPage() {
           orderStatus: order.order_status || "New",
           isModified: false,
           // Map additional fields from API to new interface
-          paymentReceived: order.payment_received,
           rtoReceived: order.rto_received,
           damaged: order.damaged,
           reviewTaken: order.review_taken,
@@ -379,6 +398,7 @@ export default function OrdersManagementPage() {
           shippingAdjustment: order.shipping_adjustment,
           payableAmount: order.payable_amount,
           returnStatus: order.return_status,
+          exchangeStatus: order.exchange_status,
           whatsappNotificationFailedReason: order.whatsapp_notification_failed_reason,
           createdAt: order.created_at,
           updatedAt: order.updated_at,
@@ -388,8 +408,8 @@ export default function OrdersManagementPage() {
         // Update pagination info for search results
         setPagination(prev => ({
           ...prev,
-          totalPages: result.totalPages || 1,
-          totalOrders: result.totalOrders || result.orders.length
+          totalPages: result.pagination?.totalPages || 1,
+          totalOrders: result.pagination?.total || result.orders.length
         }));
       } else {
         alert('No orders found or error occurred');
@@ -519,7 +539,8 @@ export default function OrdersManagementPage() {
           comments: order.comments,
           orderStatus: order.orderStatus,
           // Map additional fields to API payload
-          paymentReceived: order.paymentReceived,
+          processOrder: order.processOrder,
+          orderPacked: order.orderPacked,
           reviewTaken: order.reviewTaken,
           customerReview: order.customerReview,
           productReview: order.productReview,
@@ -583,7 +604,8 @@ export default function OrdersManagementPage() {
             comments: order.comments,
             orderStatus: order.orderStatus,
             // Map additional fields to API payload
-            paymentReceived: order.paymentReceived,
+            processOrder: order.processOrder,
+            orderPacked: order.orderPacked,
             reviewTaken: order.reviewTaken,
             customerReview: order.customerReview,
             productReview: order.productReview,
@@ -640,6 +662,14 @@ export default function OrdersManagementPage() {
         position: { x: rect.left, y: rect.top },
         isHoveringPopup: false
       });
+    } else if (order.orderStatus === 'Exchange') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setExchangePopupState({
+        isVisible: true,
+        orderId: order.id,
+        position: { x: rect.left, y: rect.top },
+        isHoveringPopup: false
+      });
     }
   };
 
@@ -681,6 +711,18 @@ export default function OrdersManagementPage() {
         }
         return prev;
       });
+
+      setExchangePopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
     }, 150); // Increased delay to 150ms
   };
 
@@ -704,6 +746,15 @@ export default function OrdersManagementPage() {
 
   const handleReturnPopupClose = () => {
     setReturnPopupState({
+      isVisible: false,
+      orderId: null,
+      position: null,
+      isHoveringPopup: false
+    });
+  };
+
+  const handleExchangePopupClose = () => {
+    setExchangePopupState({
       isVisible: false,
       orderId: null,
       position: null,
@@ -782,6 +833,34 @@ export default function OrdersManagementPage() {
     // Close the return popup after a longer delay if not hovering over it
     setTimeout(() => {
       setReturnPopupState(prev => {
+        if (!prev.isHoveringPopup) {
+          return {
+            isVisible: false,
+            orderId: null,
+            position: null,
+            isHoveringPopup: false
+          };
+        }
+        return prev;
+      });
+    }, 300); // Increased delay to 300ms
+  };
+
+  const handleExchangePopupMouseEnter = () => {
+    setExchangePopupState(prev => ({
+      ...prev,
+      isHoveringPopup: true
+    }));
+  };
+
+  const handleExchangePopupMouseLeave = () => {
+    setExchangePopupState(prev => ({
+      ...prev,
+      isHoveringPopup: false
+    }));
+    // Close the exchange popup after a longer delay if not hovering over it
+    setTimeout(() => {
+      setExchangePopupState(prev => {
         if (!prev.isHoveringPopup) {
           return {
             isVisible: false,
@@ -1017,12 +1096,13 @@ export default function OrdersManagementPage() {
                         {user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) && (
                           <>
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Payment Received
+                              Process Order
                             </th>
 
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Return
+                              Order Packed
                             </th>
+
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Comments
                             </th>
@@ -1295,26 +1375,26 @@ export default function OrdersManagementPage() {
                       {/* Admin/Super Admin Only Fields */}
                       {user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) && (
                         <>
-                          {/* Payment Received */}
+                          {/* Process Order */}
                           <td className="px-3 py-4 whitespace-nowrap">
                             <input
                               type="checkbox"
-                              checked={order.paymentReceived || false}
-                              onChange={(e) => updateOrderField(order.id, 'paymentReceived', e.target.checked)}
+                              checked={order.processOrder || false}
+                              onChange={(e) => updateOrderField(order.id, 'processOrder', e.target.checked)}
+                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
+                          </td>
+
+                          {/* Order Packed */}
+                          <td className="px-3 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={order.orderPacked || false}
+                              onChange={(e) => updateOrderField(order.id, 'orderPacked', e.target.checked)}
                               className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                             />
                           </td>
                           
-                          
-                          {/* Return */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.isReturn || false}
-                              onChange={(e) => updateOrderField(order.id, 'isReturn', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                          </td>
                           
                           {/* Comments */}
                           <td className="px-3 py-4 whitespace-nowrap">
@@ -1502,6 +1582,19 @@ export default function OrdersManagementPage() {
             onUpdate={handlePopupUpdate}
             onMouseEnter={handleReturnPopupMouseEnter}
             onMouseLeave={handleReturnPopupMouseLeave}
+          />
+        )}
+
+        {/* Exchange Details Popup */}
+        {exchangePopupState.orderId && (
+          <ExchangeDetailsPopup
+            order={orders.find(o => o.id === exchangePopupState.orderId)!}
+            isVisible={exchangePopupState.isVisible}
+            position={exchangePopupState.position}
+            onClose={handleExchangePopupClose}
+            onUpdate={handlePopupUpdate}
+            onMouseEnter={handleExchangePopupMouseEnter}
+            onMouseLeave={handleExchangePopupMouseLeave}
           />
         )}
       </div>

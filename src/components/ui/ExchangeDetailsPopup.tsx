@@ -44,7 +44,7 @@ interface OrderRow {
   updatedAt?: string;
 }
 
-interface OrderDetailsPopupProps {
+interface ExchangeDetailsPopupProps {
   order: OrderRow;
   isVisible: boolean;
   position: { x: number; y: number } | null;
@@ -54,9 +54,13 @@ interface OrderDetailsPopupProps {
   onMouseLeave: () => void;
 }
 
-const reviewOptions = ["YES", "NO", "COULDNOT CONNECT"];
+const exchangeStatusOptions = [
+  "Exchange Shipped", 
+  "Exchange Intransit", 
+  "Exchange Delivered"
+];
 
-export default function OrderDetailsPopup({ 
+export default function ExchangeDetailsPopup({ 
   order, 
   isVisible, 
   position, 
@@ -64,16 +68,18 @@ export default function OrderDetailsPopup({
   onUpdate,
   onMouseEnter,
   onMouseLeave
-}: OrderDetailsPopupProps) {
+}: ExchangeDetailsPopupProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   
   const [formData, setFormData] = useState({
     contactNo: order?.contactNo || '',
-    reviewTaken: order?.reviewTaken || '',
     comments: order?.comments || '',
-    customerReview: order?.customerReview || ''
+    returnInitiated: order?.returnInitiated || false,
+    returnPicked: order?.returnPicked || false,
+    returnDelivered: order?.returnDelivered || false,
+    exchangeStatus: order?.exchangeStatus || ''
   });
 
   // Add null check for order
@@ -84,7 +90,7 @@ export default function OrderDetailsPopup({
     e.stopPropagation();
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -124,17 +130,17 @@ export default function OrderDetailsPopup({
           paymentReceived: order.paymentReceived,
           rtoReceived: order.rtoReceived,
           damaged: order.damaged,
-          reviewTaken: formData.reviewTaken,
-          customerReview: formData.customerReview,
+          reviewTaken: order.reviewTaken,
+          customerReview: order.customerReview,
           productReview: order.productReview,
           isReturn: order.isReturn,
           returnReason: order.returnReason,
-          returnInitiated: order.returnInitiated,
-          returnPicked: order.returnPicked,
-          returnDelivered: order.returnDelivered,
+          returnInitiated: formData.returnInitiated,
+          returnPicked: formData.returnPicked,
+          returnDelivered: formData.returnDelivered,
           shippingAdjustment: order.shippingAdjustment,
           returnStatus: order.returnStatus,
-          exchangeStatus: order.exchangeStatus,
+          exchangeStatus: formData.exchangeStatus,
           whatsappNotificationFailedReason: order.whatsappNotificationFailedReason,
         }),
       });
@@ -145,9 +151,11 @@ export default function OrderDetailsPopup({
         const updatedOrder = {
           ...order,
           contactNo: formData.contactNo,
-          reviewTaken: formData.reviewTaken,
           comments: formData.comments,
-          customerReview: formData.customerReview,
+          returnInitiated: formData.returnInitiated,
+          returnPicked: formData.returnPicked,
+          returnDelivered: formData.returnDelivered,
+          exchangeStatus: formData.exchangeStatus,
           isModified: false
         };
         onUpdate(updatedOrder);
@@ -167,9 +175,11 @@ export default function OrderDetailsPopup({
   const handleCancel = () => {
     setFormData({
       contactNo: order?.contactNo || '',
-      reviewTaken: order?.reviewTaken || '',
       comments: order?.comments || '',
-      customerReview: order?.customerReview || ''
+      returnInitiated: order?.returnInitiated || false,
+      returnPicked: order?.returnPicked || false,
+      returnDelivered: order?.returnDelivered || false,
+      exchangeStatus: order?.exchangeStatus || ''
     });
     setIsEditing(false);
   };
@@ -189,7 +199,7 @@ export default function OrderDetailsPopup({
     >
       <div className="space-y-3">
         <div className="flex justify-between items-center">
-          <h3 className="text-sm font-semibold text-gray-900">Order Details</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Exchange Details</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-lg"
@@ -217,38 +227,72 @@ export default function OrderDetailsPopup({
           
           <div>
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Review Taken
+              Exchange Status
             </label>
             {isEditing ? (
               <select
-                value={formData.reviewTaken}
-                onChange={(e) => handleInputChange('reviewTaken', e.target.value)}
+                value={formData.exchangeStatus}
+                onChange={(e) => handleInputChange('exchangeStatus', e.target.value)}
                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                <option value="">Select Review Status</option>
-                {reviewOptions.map(option => (
+                <option value="">Select Status</option>
+                {exchangeStatusOptions.map(option => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
             ) : (
-              <p className="text-sm text-gray-900">{formData.reviewTaken || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{formData.exchangeStatus || 'N/A'}</p>
+            )}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Return Initiated
+            </label>
+            {isEditing ? (
+              <input
+                type="checkbox"
+                checked={formData.returnInitiated}
+                onChange={(e) => handleInputChange('returnInitiated', e.target.checked)}
+                className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
+            ) : (
+              <p className="text-sm text-gray-900">{formData.returnInitiated ? 'Yes' : 'No'}</p>
+            )}
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Return Picked
+            </label>
+            {isEditing ? (
+              <input
+                type="checkbox"
+                checked={formData.returnPicked}
+                onChange={(e) => handleInputChange('returnPicked', e.target.checked)}
+                className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              />
+            ) : (
+              <p className="text-sm text-gray-900">{formData.returnPicked ? 'Yes' : 'No'}</p>
             )}
           </div>
         </div>
         
         <div>
           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Rating
+            Return Delivered
           </label>
           {isEditing ? (
             <input
-              type="text"
-              value={formData.customerReview}
-              onChange={(e) => handleInputChange('customerReview', e.target.value)}
-              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              type="checkbox"
+              checked={formData.returnDelivered}
+              onChange={(e) => handleInputChange('returnDelivered', e.target.checked)}
+              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
             />
           ) : (
-            <p className="text-sm text-gray-900">{formData.customerReview || 'N/A'}</p>
+            <p className="text-sm text-gray-900">{formData.returnDelivered ? 'Yes' : 'No'}</p>
           )}
         </div>
         
