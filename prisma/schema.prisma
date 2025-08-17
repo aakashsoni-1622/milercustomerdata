@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+//
+// IMPORTANT: Before running prisma db push or migrate, create the miler schema:
+// CREATE SCHEMA IF NOT EXISTS miler;
+//
+// The @@map directives below will map tables to the miler schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["metrics_schema"]
+}
+
+model Customer {
+  id                  Int      @id @default(autoincrement())
+  customer_name       String?
+  contact_no          String   @unique
+  email               String?
+  address             String?
+  city                String?
+  state               String?
+  country             String?
+  shopify_customer_id String
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  // Relations
+  orders Order[]
+
+  @@schema("metrics_schema")
+}
+
+model Product {
+  id               Int      @id @default(autoincrement())
+  product_code     String   @unique
+  product_name     String
+  category         String
+  base_price       Decimal
+  available_colors String[]
+  available_sizes  String[]
+  description      String
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  orderItems OrderItem[]
+
+  @@schema("metrics_schema")
+}
+
+model Order {
+  id                                  Int       @id @default(autoincrement())
+  order_id                            String    @unique
+  tracking_url                        String?
+  customer_id                         Int
+  order_date                          DateTime?
+  state                               String?
+  total_amount                        Decimal?
+  payment_mode                        String?
+  payment_received                    Boolean   @default(false)
+  order_confirmation                  String?
+  order_status                        String    @default("New")
+  comments                            String?
+  rto_received                        Boolean   @default(false)
+  damaged                             Boolean   @default(false)
+  review_taken                        String?
+  customer_review                     String?
+  product_review                      String?
+  is_return                           Boolean   @default(false)
+  return_reason                       String?
+  return_initiated                    Boolean   @default(false)
+  return_picked                       Boolean   @default(false)
+  return_delivered                    Boolean   @default(false)
+  shipping_adjustment                 String?
+  payable_amount                      String?
+  return_status                       String?
+  whatsapp_notification_failed_reason String?
+  meta_data                           Json?
+  created_at                          DateTime  @default(now())
+  updated_at                          DateTime  @updatedAt
+
+  // Relations
+  customer   Customer    @relation(fields: [customer_id], references: [id])
+  orderItems OrderItem[]
+
+  @@schema("metrics_schema")
+}
+
+model OrderItem {
+  id              Int      @id @default(autoincrement())
+  order_id        Int
+  product_id      Int
+  selected_colors String[]
+  selected_sizes  String[]
+  quantity        Int
+  unit_price      Decimal?
+  total_price     Decimal?
+  created_at      DateTime @default(now())
+
+  // Relations
+  order   Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@schema("metrics_schema")
+}
+
+// User and Authentication Models
+model User {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique @db.VarChar(50)
+  email         String    @unique @db.VarChar(100)
+  password_hash String    @db.VarChar(255)
+  first_name    String    @db.VarChar(50)
+  last_name     String    @db.VarChar(50)
+  role          UserRole
+  is_active     Boolean   @default(true)
+  phone         String?   @db.VarChar(15)
+  department    String?   @db.VarChar(50)
+  last_login    DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  created_by    Int?
+  updated_by    Int?
+
+  // Relations
+  sessions      UserSession[]
+  auditLogs     UserAuditLog[]
+  createdUsers  User[]         @relation("UserCreatedBy")
+  updatedUsers  User[]         @relation("UserUpdatedBy")
+  createdByUser User?          @relation("UserCreatedBy", fields: [created_by], references: [id])
+  updatedByUser User?          @relation("UserUpdatedBy", fields: [updated_by], references: [id])
+
+  @@schema("metrics_schema")
+}
+
+model UserSession {
+  id            Int      @id @default(autoincrement())
+  user_id       Int
+  session_token String   @unique @db.VarChar(255)
+  expires_at    DateTime
+  ip_address    String?  @db.Inet
+  user_agent    String?
+  created_at    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("metrics_schema")
+}
+
+model UserAuditLog {
+  id         Int      @id @default(autoincrement())
+  user_id    Int?
+  action     String   @db.VarChar(100)
+  table_name String?  @db.VarChar(50)
+  record_id  Int?
+  old_values Json?
+  new_values Json?
+  ip_address String?  @db.Inet
+  user_agent String?
+  created_at DateTime @default(now())
+
+  // Relations
+  user User? @relation(fields: [user_id], references: [id])
+
+  @@schema("metrics_schema")
+}
+
+//ENUMS
+
+enum ProductCategory {
+  SHIRT
+  JACKET
+  TSHIRT
+  LOWER
+  JOGGER
+
+  @@schema("metrics_schema")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  OPERATIONS
+  CUSTOMER_SUPPORT
+  VIEWER
+
+  @@schema("metrics_schema")
+}

@@ -67,21 +67,16 @@ const ProductsTable: React.FC = () => {
     }
   };
 
-  const handleCreateProduct = async () => {
+  const handleCreateProduct = async (productData?: typeof defaultProduct) => {
     try {
+      console.log("productData",productData);
       const response = await fetch('/api/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          productCode: newProduct.product_code,
-          productName: newProduct.product_name,
-          category: newProduct.category,
-          basePrice: newProduct.base_price,
-          availableColors: newProduct.available_colors,
-          availableSizes: newProduct.available_sizes,
-          description: newProduct.description
+         ...productData
         }),
       });
 
@@ -110,14 +105,7 @@ const ProductsTable: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          productCode: product.product_code,
-          productName: product.product_name,
-          category: product.category,
-          basePrice: product.base_price,
-          availableColors: product.available_colors,
-          availableSizes: product.available_sizes,
-          description: product.description,
-          isActive: product.is_active
+          ...product
         }),
       });
 
@@ -172,9 +160,9 @@ const ProductsTable: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD'
+      currency: 'INR'
     }).format(amount);
   };
 
@@ -190,10 +178,8 @@ const ProductsTable: React.FC = () => {
     isNew?: boolean 
   }) => {
     const [formData, setFormData] = useState(product);
-
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      
       if (!formData.product_code || !formData.product_name) {
         alert('Product code and name are required');
         return;
@@ -480,13 +466,13 @@ const ProductsTable: React.FC = () => {
               <div className="flex space-x-2">
                 <Button
                   onClick={() => setEditingProduct(product)}
-                  className="flex-1 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 px-3 py-1 text-sm"
+                  className="flex-1 border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 px-3 py-1 text-sm font-medium"
                 >
                   Edit
                 </Button>
                 <Button
                   onClick={() => handleDeleteProduct(product.id)}
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border border-gray-300 bg-white px-3 py-1 text-sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border border-gray-300 bg-white px-3 py-1 text-sm font-medium"
                 >
                   Delete
                 </Button>

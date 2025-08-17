@@ -45,12 +45,6 @@ interface OrderRow {
   isModified: boolean;
   // Additional fields for admin/super admin
   paymentReceived?: boolean;
-  processOrder?: boolean;
-  orderPacked?: boolean;
-  orderCancelled?: boolean;
-  delivered?: boolean;
-  isRto?: boolean;
-  rtoReason?: string;
   rtoReceived?: boolean;
   damaged?: boolean;
   reviewTaken?: string;
@@ -83,12 +77,6 @@ interface ApiOrder {
   contact_no: string;
   // Additional fields from orders_new table
   payment_received?: boolean;
-  process_order?: boolean;
-  order_packed?: boolean;
-  order_cancelled?: boolean;
-  delivered?: boolean;
-  is_rto?: boolean;
-  rto_reason?: string;
   rto_received?: boolean;
   damaged?: boolean;
   review_taken?: string;
@@ -128,7 +116,7 @@ const states = [
   "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
   "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
   "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Jammu and Kashmir"
 ];
 
 const paymentModes = ["PAID", "COD"];
@@ -155,6 +143,8 @@ export default function OrdersManagementPage() {
     pageSize: 25
   });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
   const { user } = useAuth();
   
   // Add state for popup
@@ -278,12 +268,6 @@ export default function OrdersManagementPage() {
           isModified: false,
           // Map additional fields from API to new interface
           paymentReceived: order.payment_received,
-          processOrder: order.process_order,
-          orderPacked: order.order_packed,
-          orderCancelled: order.order_cancelled,
-          delivered: order.delivered,
-          isRto: order.is_rto,
-          rtoReason: order.rto_reason,
           rtoReceived: order.rto_received,
           damaged: order.damaged,
           reviewTaken: order.review_taken,
@@ -382,12 +366,6 @@ export default function OrdersManagementPage() {
           isModified: false,
           // Map additional fields from API to new interface
           paymentReceived: order.payment_received,
-          processOrder: order.process_order,
-          orderPacked: order.order_packed,
-          orderCancelled: order.order_cancelled,
-          delivered: order.delivered,
-          isRto: order.is_rto,
-          rtoReason: order.rto_reason,
           rtoReceived: order.rto_received,
           damaged: order.damaged,
           reviewTaken: order.review_taken,
@@ -442,6 +420,36 @@ export default function OrdersManagementPage() {
     setSearchQuery("");
     setPagination(prev => ({ ...prev, currentPage: 1 }));
     fetchAllOrders();
+  };
+
+  const handleSyncOrders = async () => {
+    try {
+      setIsSyncing(true);
+      setSyncMessage("Syncing orders from Shopify...");
+      
+      const response = await fetch('/api/orders/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        setSyncMessage(result.message);
+        // Refresh orders after sync
+        setTimeout(() => {
+          fetchAllOrders();
+        }, 1000);
+      } else {
+        setSyncMessage(`Error: ${result.error} - ${result.details}`);
+      }
+    } catch (error) {
+      setSyncMessage(`Error syncing orders: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const updateOrderField = (orderRowId: string, field: keyof OrderRow, value: string | number | boolean | SelectedProduct[]) => {
@@ -512,12 +520,6 @@ export default function OrdersManagementPage() {
           orderStatus: order.orderStatus,
           // Map additional fields to API payload
           paymentReceived: order.paymentReceived,
-          processOrder: order.processOrder,
-          orderPacked: order.orderPacked,
-          orderCancelled: order.orderCancelled,
-          delivered: order.delivered,
-          isRto: order.isRto,
-          rtoReason: order.rtoReason,
           reviewTaken: order.reviewTaken,
           customerReview: order.customerReview,
           productReview: order.productReview,
@@ -582,12 +584,6 @@ export default function OrdersManagementPage() {
             orderStatus: order.orderStatus,
             // Map additional fields to API payload
             paymentReceived: order.paymentReceived,
-            processOrder: order.processOrder,
-            orderPacked: order.orderPacked,
-            orderCancelled: order.orderCancelled,
-            delivered: order.delivered,
-            isRto: order.isRto,
-            rtoReason: order.rtoReason,
             reviewTaken: order.reviewTaken,
             customerReview: order.customerReview,
             productReview: order.productReview,
@@ -864,7 +860,31 @@ export default function OrdersManagementPage() {
                 Clear
               </button>
             )}
+            {/* Shopify Sync Button - Only for Admins and Super Admins */}
+            {user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) && (
+              <button
+                onClick={handleSyncOrders}
+                disabled={isSyncing}
+                className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {isSyncing ? 'Syncing...' : 'Sync Shopify'}
+              </button>
+            )}
           </div>
+          
+          {/* Sync Status Message */}
+          {syncMessage && (
+            <div className={`mt-4 p-3 rounded-md text-sm ${
+              syncMessage.includes("Error") 
+                ? "bg-red-100 text-red-700 border border-red-200" 
+                : "bg-green-100 text-green-700 border border-green-200"
+            }`}>
+              {syncMessage}
+            </div>
+          )}
         </div>
 
         {/* Pagination Controls */}
@@ -959,9 +979,7 @@ export default function OrdersManagementPage() {
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           COMMENTS
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          PROCESS ORDER
-                        </th>
+
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           STATUS
                         </th>
@@ -1001,21 +1019,7 @@ export default function OrdersManagementPage() {
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Payment Received
                             </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Process Order
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Order Packed
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Order Cancelled
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Delivered
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              RTO
-                            </th>
+
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Return
                             </th>
@@ -1120,16 +1124,6 @@ export default function OrdersManagementPage() {
                               onChange={(e) => updateOrderField(order.id, 'comments', e.target.value)}
                               placeholder="Comments"
                               className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </td>
-                          
-                          {/* Process Order */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.processOrder || false}
-                              onChange={(e) => updateOrderField(order.id, 'processOrder', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                             />
                           </td>
                           
@@ -1311,66 +1305,6 @@ export default function OrdersManagementPage() {
                             />
                           </td>
                           
-                          {/* Process Order */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.processOrder || false}
-                              onChange={(e) => updateOrderField(order.id, 'processOrder', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                          </td>
-                          
-                          {/* Order Packed */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.orderPacked || false}
-                              onChange={(e) => updateOrderField(order.id, 'orderPacked', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                          </td>
-                          
-                          {/* Order Cancelled */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.orderCancelled || false}
-                              onChange={(e) => updateOrderField(order.id, 'orderCancelled', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                          </td>
-                          
-                          {/* Delivered */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <input
-                              type="checkbox"
-                              checked={order.delivered || false}
-                              onChange={(e) => updateOrderField(order.id, 'delivered', e.target.checked)}
-                              className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                            />
-                          </td>
-                          
-                          {/* RTO */}
-                          <td className="px-3 py-4 whitespace-nowrap">
-                            <div className="space-y-1">
-                              <input
-                                type="checkbox"
-                                checked={order.isRto || false}
-                                onChange={(e) => updateOrderField(order.id, 'isRto', e.target.checked)}
-                                className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
-                              />
-                              {order.isRto && (
-                                <input
-                                  type="text"
-                                  value={order.rtoReason || ''}
-                                  onChange={(e) => updateOrderField(order.id, 'rtoReason', e.target.value)}
-                                  placeholder="RTO Reason"
-                                  className="w-24 px-1 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                              )}
-                            </div>
-                          </td>
                           
                           {/* Return */}
                           <td className="px-3 py-4 whitespace-nowrap">

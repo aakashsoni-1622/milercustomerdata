@@ -1,30 +1,18 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 // GET /api/products - Get all active products
 export async function GET() {
   try {
-    const result = await pool.query(`
-      SELECT 
-        id,
-        product_code,
-        product_name,
-        category,
-        base_price,
-        available_colors,
-        available_sizes,
-        description,
-        is_active,
-        created_at,
-        updated_at
-      FROM miler.products 
-      WHERE is_active = true 
-      ORDER BY product_name ASC
-    `);
+    const result = await prisma.product.findMany({
+      where: {
+        is_active: true,
+      },
+    });
 
     return NextResponse.json({
       success: true,
-      products: result.rows,
+      products: result,
     });
   } catch (error) {
     console.error("Error fetching products:", error);
@@ -45,17 +33,16 @@ export async function POST(request: Request) {
     const data = await request.json();
 
     const {
-      productCode,
-      productName,
+      product_code,
+      product_name,
       category,
-      basePrice,
-      availableColors,
-      availableSizes,
+      base_price,
+      available_colors,
+      available_sizes,
       description,
     } = data;
-
     // Validate required fields
-    if (!productCode || !productName) {
+    if (!product_code || !product_name) {
       return NextResponse.json(
         {
           success: false,
@@ -65,42 +52,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await pool.connect();
-    try {
-      const result = await client.query(
-        `
-        INSERT INTO miler.products (
-          product_code,
-          product_name,
-          category,
-          base_price,
-          available_colors,
-          available_sizes,
-          description,
-          created_at,
-          updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-        RETURNING *
-      `,
-        [
-          productCode,
-          productName,
-          category || null,
-          parseFloat(basePrice) || null,
-          availableColors || [],
-          availableSizes || [],
-          description || null,
-        ]
-      );
+    const result = await prisma.product.create({
+      data: {
+        base_price: base_price,
+        available_colors: available_colors,
+        available_sizes: available_sizes,
+        description: description,
+        product_code,
+        product_name,
+        category,
+      },
+      select: {
+        id: true,
+      },
+    });
 
-      return NextResponse.json({
-        success: true,
-        product: result.rows[0],
-        message: "Product created successfully",
-      });
-    } finally {
-      client.release();
-    }
+    return NextResponse.json({
+      success: true,
+      product: result,
+      message: "Product created successfully",
+    });
   } catch (error) {
     console.error("Error creating product:", error);
 

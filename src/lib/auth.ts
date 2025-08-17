@@ -161,6 +161,8 @@ export const PUBLIC_ROUTES = [
   "/api/health/db",
   "/api/orders/bulk-insert",
   "/api/orders/create-v2",
+  "/api/shopify/customers",
+  "/api/shopify/orders",
 ];
 export const PROTECTED_ROUTES = [
   "/",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(request: Request) {
   try {
@@ -17,55 +18,54 @@ export async function GET(request: Request) {
     const state = searchParams.get("state") || "";
     const paymentMode = searchParams.get("paymentMode") || "";
 
-    // Build WHERE clause
-    const whereConditions: string[] = [];
-    const queryParams: (string | number)[] = [];
-    let paramIndex = 1;
+    // Build Prisma where conditions
+    const whereConditions: any = {};
 
     if (search) {
-      whereConditions.push(
-        `(CAST(o.order_id AS TEXT) ILIKE $${paramIndex} OR c.customer_name ILIKE $${paramIndex} OR CAST(c.contact_no AS TEXT) ILIKE $${paramIndex})`
-      );
-      queryParams.push(`%${search}%`);
-      paramIndex++;
+      whereConditions.OR = [
+        { order_id: { contains: search, mode: "insensitive" } },
+        {
+          customer: {
+            customer_name: { contains: search, mode: "insensitive" },
+          },
+        },
+        { customer: { contact_no: { equals: parseFloat(search) || 0 } } },
+      ];
     }
 
     if (customerName) {
-      whereConditions.push(`c.customer_name ILIKE $${paramIndex}`);
-      queryParams.push(`%${customerName}%`);
-      paramIndex++;
+      whereConditions.customer = {
+        ...whereConditions.customer,
+        customer_name: { contains: customerName, mode: "insensitive" },
+      };
     }
 
     if (orderDate) {
-      whereConditions.push(`DATE(o.order_date) = $${paramIndex}`);
-      queryParams.push(orderDate);
-      paramIndex++;
+      whereConditions.order_date = {
+        gte: new Date(orderDate),
+        lt: new Date(new Date(orderDate).getTime() + 24 * 60 * 60 * 1000),
+      };
     }
 
     if (orderStatus) {
-      whereConditions.push(`o.order_status ILIKE $${paramIndex}`);
-      queryParams.push(`%${orderStatus}%`);
-      paramIndex++;
+      whereConditions.order_status = {
+        contains: orderStatus,
+        mode: "insensitive",
+      };
     }
 
     if (state) {
-      whereConditions.push(`o.state ILIKE $${paramIndex}`);
-      queryParams.push(`%${state}%`);
-      paramIndex++;
+      whereConditions.state = { contains: state, mode: "insensitive" };
     }
 
     if (paymentMode) {
-      whereConditions.push(`o.payment_mode ILIKE $${paramIndex}`);
-      queryParams.push(`%${paymentMode}%`);
-      paramIndex++;
+      whereConditions.payment_mode = {
+        contains: paymentMode,
+        mode: "insensitive",
+      };
     }
 
-    const whereClause =
-      whereConditions.length > 0
-        ? `WHERE ${whereConditions.join(" AND ")}`
-        : "";
-
-    // Validate sort column
+    // Validate sort column and build orderBy
     const validSortColumns = [
       "order_id",
       "order_date",
@@ -76,97 +76,111 @@ export async function GET(request: Request) {
       "created_at",
       "customer_name",
     ];
-    const safeSortBy = validSortColumns.includes(sortBy)
-      ? sortBy
-      : "created_at";
-    const safeSortOrder = sortOrder.toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+    const orderBy: Prisma.OrderOrderByWithRelationInput = {};
+    if (validSortColumns.includes(sortBy)) {
+      if (sortBy === "customer_name") {
+        orderBy.customer = {
+          customer_name: sortOrder.toLowerCase() as "asc" | "desc",
+        };
+      } else {
+        (orderBy as any)[sortBy] = sortOrder.toLowerCase() as "asc" | "desc";
+      }
+    } else {
+      orderBy.created_at = "desc";
+    }
 
     // Calculate offset
     const offset = (page - 1) * limit;
 
     // Get total count
-    const countQuery = `
-      SELECT COUNT(DISTINCT o.id) as total
-      FROM miler.orders_new o
-      JOIN miler.customers c ON o.customer_id = c.id
-      ${whereClause}
-    `;
+    const total = await prisma.order.count({
+      where: whereConditions,
+    });
 
-    const countResult = await pool.query(countQuery, queryParams);
-    const total = parseInt(countResult.rows[0].total);
+    // Get orders with relations
+    const orders = await prisma.order.findMany({
+      where: whereConditions,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            customer_name: true,
+            contact_no: true,
+            email: true,
+            address: true,
+            city: true,
+            country: true,
+          },
+        },
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                product_code: true,
+                product_name: true,
+                category: true,
+              },
+            },
+          },
+          orderBy: { id: "asc" },
+        },
+      },
+      orderBy: orderBy,
+      skip: offset,
+      take: limit,
+    });
 
-    // Get orders with aggregated order items
-    const ordersQuery = `
-      SELECT 
-        o.id,
-        o.order_id,
-        o.order_date,
-        o.state,
-        o.total_amount,
-        o.payment_mode,
-        o.payment_received,
-        o.order_confirmation,
-        o.order_status,
-        o.comments,
-        o.process_order,
-        o.order_packed,
-        o.order_cancelled,
-        o.delivered,
-        o.is_rto,
-        o.rto_reason,
-        o.rto_received,
-        o.damaged,
-        o.review_taken,
-        o.customer_review,
-        o.product_review,
-        o.is_return,
-        o.return_reason,
-        o.return_initiated,
-        o.return_picked,
-        o.return_delivered,
-        o.shipping_adjustment,
-        o.return_status,
-        o.whatsapp_notification_failed_reason,
-        o.meta_data,
-        o.created_at,
-        o.updated_at,
-        c.id as customer_id,
-        c.customer_name,
-        c.contact_no,
-        c.email,
-        c.address,
-        c.city,
-        c.country,
-        -- Aggregate order items
-        json_agg(
-          json_build_object(
-            'id', oi.id,
-            'product_id', oi.product_id,
-            'product_code', p.product_code,
-            'product_name', p.product_name,
-            'category', p.category,
-            'selected_colors', oi.selected_colors,
-            'selected_sizes', oi.selected_sizes,
-            'quantity', oi.quantity,
-            'unit_price', oi.unit_price,
-            'total_price', oi.total_price
-          ) ORDER BY oi.id
-        ) as order_items
-      FROM miler.orders_new o
-      JOIN miler.customers c ON o.customer_id = c.id
-      LEFT JOIN miler.order_items oi ON o.id = oi.order_id
-      LEFT JOIN miler.products p ON oi.product_id = p.id
-      ${whereClause}
-      GROUP BY o.id, c.id, c.customer_name, c.contact_no, c.email, c.address, c.city, c.country
-      ORDER BY ${
-        safeSortBy === "customer_name" ? "c.customer_name" : "o." + safeSortBy
-      } ${safeSortOrder}
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-    `;
-
-    queryParams.push(limit, offset);
-
-    const ordersResult = await pool.query(ordersQuery, queryParams);
+    // Transform data to match the expected format
+    const transformedOrders = orders.map((order: any) => ({
+      id: order.id,
+      order_id: order.order_id,
+      order_date: order.order_date,
+      state: order.state,
+      total_amount: order.total_amount,
+      payment_mode: order.payment_mode,
+      payment_received: order.payment_received,
+      order_confirmation: order.order_confirmation,
+      order_status: order.order_status,
+      comments: order.comments,
+      rto_received: order.rto_received,
+      damaged: order.damaged,
+      review_taken: order.review_taken,
+      customer_review: order.customer_review,
+      product_review: order.product_review,
+      is_return: order.is_return,
+      return_reason: order.return_reason,
+      return_initiated: order.return_initiated,
+      return_picked: order.return_picked,
+      return_delivered: order.return_delivered,
+      shipping_adjustment: order.shipping_adjustment,
+      return_status: order.return_status,
+      whatsapp_notification_failed_reason:
+        order.whatsapp_notification_failed_reason,
+      meta_data: order.meta_data,
+      created_at: order.created_at,
+      updated_at: order.updated_at,
+      customer_id: order.customer.id,
+      customer_name: order.customer.customer_name,
+      contact_no: order.customer.contact_no,
+      email: order.customer.email,
+      address: order.customer.address,
+      city: order.customer.city,
+      country: order.customer.country,
+      order_items: order.orderItems.map((item: any) => ({
+        id: item.id,
+        product_id: item.product_id,
+        product_code: item.product.product_code,
+        product_name: item.product.product_name,
+        category: item.product.category,
+        selected_colors: item.selected_colors,
+        selected_sizes: item.selected_sizes,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      })),
+    }));
 
     // Calculate pagination
     const totalPages = Math.ceil(total / limit);
@@ -184,7 +198,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      orders: ordersResult.rows,
+      orders: transformedOrders,
       pagination,
     });
   } catch (error) {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import pool from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 // GET /api/products/[id] - Get single product
 export async function GET(
@@ -17,14 +17,11 @@ export async function GET(
       );
     }
 
-    const result = await pool.query(
-      `
-      SELECT * FROM miler.products WHERE id = $1
-    `,
-      [productId]
-    );
+    const result = await prisma.product.findUnique({
+      where: { id: productId },
+    });
 
-    if (result.rows.length === 0) {
+    if (!result) {
       return NextResponse.json(
         { success: false, error: "Product not found" },
         { status: 404 }
@@ -33,7 +30,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      product: result.rows[0],
+      product: result,
     });
   } catch (error) {
     console.error("Error fetching product:", error);
@@ -66,61 +63,35 @@ export async function PUT(
     }
 
     const {
-      productCode,
-      productName,
+      product_code,
+      product_name,
       category,
-      basePrice,
-      availableColors,
-      availableSizes,
+      base_price,
+      available_colors,
+      available_sizes,
       description,
-      isActive,
+      is_active,
     } = data;
 
-    const client = await pool.connect();
-    try {
-      const result = await client.query(
-        `
-        UPDATE miler.products SET
-          product_code = $1,
-          product_name = $2,
-          category = $3,
-          base_price = $4,
-          available_colors = $5,
-          available_sizes = $6,
-          description = $7,
-          is_active = $8,
-          updated_at = NOW()
-        WHERE id = $9
-        RETURNING *
-      `,
-        [
-          productCode,
-          productName,
-          category,
-          parseFloat(basePrice) || null,
-          availableColors || [],
-          availableSizes || [],
-          description,
-          isActive !== undefined ? isActive : true,
-          productId,
-        ]
-      );
+    const result = await prisma.product.update({
+      where: { id: productId },
+      data: {
+        product_code,
+        product_name,
+        category,
+        base_price,
+        available_colors: available_colors || [],
+        available_sizes: available_sizes || [],
+        description,
+        is_active: is_active !== undefined ? is_active : true,
+      },
+    });
 
-      if (result.rows.length === 0) {
-        return NextResponse.json(
-          { success: false, error: "Product not found" },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        product: result.rows[0],
-        message: "Product updated successfully",
-      });
-    } finally {
-      client.release();
-    }
+    return NextResponse.json({
+      success: true,
+      product: result,
+      message: "Product updated successfully",
+    });
   } catch (error) {
     console.error("Error updating product:", error);
     return NextResponse.json(
@@ -150,34 +121,18 @@ export async function DELETE(
       );
     }
 
-    const client = await pool.connect();
-    try {
-      // Soft delete by setting is_active to false
-      const result = await client.query(
-        `
-        UPDATE miler.products SET
-          is_active = false,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-      `,
-        [productId]
-      );
+    // Soft delete by setting is_active to false
+    const result = await prisma.product.update({
+      where: { id: productId },
+      data: {
+        is_active: false,
+      },
+    });
 
-      if (result.rows.length === 0) {
-        return NextResponse.json(
-          { success: false, error: "Product not found" },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        message: "Product deleted successfully",
-      });
-    } finally {
-      client.release();
-    }
+    return NextResponse.json({
+      success: true,
+      message: result,
+    });
   } catch (error) {
     console.error("Error deleting product:", error);
     return NextResponse.json(
