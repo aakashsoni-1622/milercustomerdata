@@ -150,12 +150,7 @@ const OrdersTable: React.FC = () => {
     });
   };
 
-  const handleClearFilters = () => {
-    setFilters({
-      search: '', customerName: '', orderDate: '', orderStatus: '',
-      orderTotal: '', state: '', paymentMode: ''
-    });
-  };
+
 
   const handleSort = (column: string) => {
     if (sortBy === column) {
@@ -337,19 +332,11 @@ const OrdersTable: React.FC = () => {
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
-        currentFilters={filters}
-        searchPlaceholder="Search orders..."
         title="Order Filters"
-        filterFields={[
-          { key: 'customerName', label: 'Customer Name', placeholder: 'Filter by customer name' },
-          { key: 'orderDate', label: 'Order Date', type: 'date' },
-          { key: 'orderStatus', label: 'Order Status', placeholder: 'Filter by order status' },
-          { key: 'orderTotal', label: 'Order Total', type: 'number', placeholder: 'Filter by order total' },
-          { key: 'state', label: 'State', placeholder: 'Filter by state' },
-          { key: 'paymentMode', label: 'Payment Mode', placeholder: 'Filter by payment mode' }
-        ]}
+        filterType="text"
+        options={[]}
+        currentValue=""
+        onApply={(value) => handleApplyFilters({ search: value as string })}
       />
 
       {/* Table Container */}

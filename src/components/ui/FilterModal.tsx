@@ -1,136 +1,140 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import Input from './Input';
-import Button from './Button';
-
-interface FilterField {
-  key: string;
-  label: string;
-  type?: 'text' | 'date' | 'email' | 'number';
-  placeholder?: string;
-}
+import { useState, useEffect } from "react";
 
 interface FilterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onApply: (filters: Record<string, string>) => void;
-  onClear: () => void;
-  currentFilters: Record<string, string>;
-  searchPlaceholder?: string;
-  title?: string;
-  filterFields?: FilterField[];
+  title: string;
+  filterType: 'text' | 'select' | 'date' | 'checkbox';
+  options?: string[];
+  currentValue?: string | boolean;
+  onApply: (value: string | boolean) => void;
+  placeholder?: string;
 }
 
-const FilterModal: React.FC<FilterModalProps> = ({
+export default function FilterModal({
   isOpen,
   onClose,
+  title,
+  filterType,
+  options = [],
+  currentValue = '',
   onApply,
-  onClear,
-  currentFilters,
-  searchPlaceholder = "Search...",
-  title = "Filters",
-  filterFields = []
-}) => {
-  const [localFilters, setLocalFilters] = useState<Record<string, string>>(currentFilters);
+  placeholder = "Enter value..."
+}: FilterModalProps) {
+  const [value, setValue] = useState<string | boolean>(currentValue);
 
   useEffect(() => {
-    setLocalFilters(currentFilters);
-  }, [currentFilters]);
-
-  const handleSearchChange = (value: string) => {
-    setLocalFilters((prev: Record<string, string>) => ({ ...prev, search: value }));
-  };
-
-  const handleFieldChange = (key: string, value: string) => {
-    setLocalFilters((prev: Record<string, string>) => ({ ...prev, [key]: value }));
-  };
+    setValue(currentValue);
+  }, [currentValue]);
 
   const handleApply = () => {
-    onApply(localFilters);
+    onApply(value);
     onClose();
   };
 
   const handleClear = () => {
-    const clearedFilters = Object.keys(localFilters).reduce((acc, key) => {
-      acc[key] = '';
-      return acc;
-    }, {} as Record<string, string>);
-    
-    setLocalFilters(clearedFilters);
-    onClear();
+    setValue('');
+    onApply('');
     onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <div className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-w-sm">
+      <div className="space-y-3">
+        <div className="flex justify-between items-center">
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg"
+          >
+            ×
+          </button>
+        </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search
-              </label>
-              <Input
-                placeholder={searchPlaceholder}
-                value={localFilters.search || ''}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Search across all text fields
-              </p>
-            </div>
-
-            {/* Dynamic filter fields */}
-            {filterFields.map((field) => (
-              <div key={field.key}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {field.label}
-                </label>
-                <Input
-                  type={field.type || 'text'}
-                  placeholder={field.placeholder || `Filter by ${field.label.toLowerCase()}`}
-                  value={localFilters[field.key] || ''}
-                  onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                  className="w-full"
-                />
-              </div>
-            ))}
+        {filterType === 'text' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Value
+            </label>
+            <input
+              type="text"
+              value={value as string}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholder}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
           </div>
+        )}
 
-          <div className="flex justify-end space-x-3 mt-6">
-            <Button
-              onClick={handleClear}
-              className="bg-gray-500 hover:bg-gray-600"
+        {filterType === 'select' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Select Option
+            </label>
+            <select
+              value={value as string}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              Clear All
-            </Button>
-            <Button
-              onClick={handleApply}
-              className="bg-blue-500 hover:bg-blue-600"
-            >
-              Apply Filters
-            </Button>
+              <option value="">Select...</option>
+              {options.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
           </div>
+        )}
+
+        {filterType === 'date' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Date
+            </label>
+            <input
+              type="date"
+              value={value as string}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        )}
+
+        {filterType === 'checkbox' && (
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Status
+            </label>
+            <select
+              value={value as string}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">All</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex space-x-2 pt-2">
+          <button
+            onClick={handleApply}
+            className="flex-1 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            Apply
+          </button>
+          <button
+            onClick={handleClear}
+            className="flex-1 px-3 py-1 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            Clear
+          </button>
         </div>
       </div>
     </div>
   );
-};
-
-export default FilterModal; 
+} 

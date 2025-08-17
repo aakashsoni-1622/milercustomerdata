@@ -627,14 +627,11 @@ export function UsersTable({ currentUserRole }: UsersTableProps) {
         <FilterModal
           isOpen={isFilterModalOpen}
           onClose={() => setIsFilterModalOpen(false)}
+          title="User Filters"
+          filterType="text"
+          options={[]}
+          currentValue=""
           onApply={() => setIsFilterModalOpen(false)}
-          onClear={() => setIsFilterModalOpen(false)}
-          currentFilters={{}}
-          filterFields={[
-            { key: "role", label: "Role", type: "text" },
-            { key: "department", label: "Department", type: "text" },
-            { key: "is_active", label: "Status", type: "text" },
-          ]}
         />
       )}
     </div>

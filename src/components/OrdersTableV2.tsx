@@ -392,16 +392,11 @@ const OrdersTableV2: React.FC = () => {
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        onApply={handleApplyFilters}
-        onClear={() => setFilters({ search: '', customerName: '', orderDate: '', orderStatus: '', state: '', paymentMode: '' })}
-        currentFilters={filters}
-        filterFields={[
-          { key: 'customerName', label: 'Customer Name', type: 'text' },
-          { key: 'orderDate', label: 'Order Date', type: 'date' },
-          { key: 'orderStatus', label: 'Order Status', type: 'text' },
-          { key: 'state', label: 'State', type: 'text' },
-          { key: 'paymentMode', label: 'Payment Mode', type: 'text' }
-        ]}
+        title="Order Filters"
+        filterType="text"
+        options={[]}
+        currentValue=""
+        onApply={(value) => handleApplyFilters({ search: value as string })}
       />
     </div>
   );

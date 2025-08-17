@@ -18,6 +18,14 @@ export async function GET(request: Request) {
     const state = searchParams.get("state") || "";
     const paymentMode = searchParams.get("paymentMode") || "";
 
+    // New filter parameters
+    const processOrder = searchParams.get("processOrder") || "";
+    const orderPacked = searchParams.get("orderPacked") || "";
+    const status = searchParams.get("status") || "";
+    const date = searchParams.get("date") || "";
+    const orderConfirmation = searchParams.get("orderConfirmation") || "";
+    const paymentStatus = searchParams.get("paymentStatus") || "";
+
     // Build Prisma where conditions
     const whereConditions: any = {};
 
@@ -61,6 +69,32 @@ export async function GET(request: Request) {
     if (paymentMode) {
       whereConditions.payment_mode = {
         contains: paymentMode,
+        mode: "insensitive",
+      };
+    }
+
+    // Add new filter conditions
+    if (processOrder !== undefined && processOrder !== "") {
+      whereConditions.process_order = processOrder === "true";
+    }
+    if (orderPacked !== undefined && orderPacked !== "") {
+      whereConditions.order_packed = orderPacked === "true";
+    }
+    if (status) {
+      whereConditions.order_status = { contains: status, mode: "insensitive" };
+    }
+    if (date) {
+      whereConditions.order_date = { contains: date, mode: "insensitive" };
+    }
+    if (orderConfirmation) {
+      whereConditions.order_confirmation = {
+        contains: orderConfirmation,
+        mode: "insensitive",
+      };
+    }
+    if (paymentStatus) {
+      whereConditions.payment_mode = {
+        contains: paymentStatus,
         mode: "insensitive",
       };
     }

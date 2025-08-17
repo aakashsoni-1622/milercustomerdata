@@ -121,11 +121,7 @@ const CustomersTable: React.FC = () => {
     });
   };
 
-  const handleClearFilters = () => {
-    setFilters({
-      search: '', customerName: '', city: '', country: ''
-    });
-  };
+
 
   const handleCheckboxChange = (customerId: number, field: keyof Customer, value: boolean) => {
     setModifiedCustomers(prev => {
@@ -239,16 +235,11 @@ const CustomersTable: React.FC = () => {
       <FilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        onApply={handleApplyFilters}
-        onClear={handleClearFilters}
-        currentFilters={filters}
-        searchPlaceholder="Search customers..."
         title="Customer Filters"
-        filterFields={[
-          { key: 'customerName', label: 'Customer Name', placeholder: 'Filter by customer name' },
-          { key: 'city', label: 'City', placeholder: 'Filter by city' },
-          { key: 'country', label: 'Country', placeholder: 'Filter by country' }
-        ]}
+        filterType="text"
+        options={[]}
+        currentValue=""
+        onApply={(value) => handleApplyFilters({ search: value as string })}
       />
 
       {/* Table Container */}

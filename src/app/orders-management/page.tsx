@@ -7,6 +7,7 @@ import OrderDetailsPopup from "@/components/ui/OrderDetailsPopup";
 import RtoDetailsPopup from "@/components/ui/RtoDetailsPopup";
 import ReturnDetailsPopup from "@/components/ui/ReturnDetailsPopup";
 import ExchangeDetailsPopup from "@/components/ui/ExchangeDetailsPopup";
+import FilterModal from "@/components/ui/FilterModal";
 import { useAuth } from "@/components/AuthProvider";
 import { UserRole } from "@/lib/auth";
 
@@ -150,6 +151,29 @@ export default function OrdersManagementPage() {
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    state: '',
+    paymentStatus: '',
+    processOrder: '',
+    orderPacked: '',
+    status: '',
+    date: '',
+    orderConfirmation: ''
+  })
+  
+  // Filter modal states
+  const [filterModal, setFilterModal] = useState({
+    isOpen: false,
+    type: '',
+    title: '',
+    filterType: 'text' as 'text' | 'select' | 'date' | 'checkbox',
+    options: [] as string[],
+    currentValue: '',
+    position: { x: 0, y: 0 }
+  });
+  
   const { user } = useAuth();
   
   // Add state for popup
@@ -212,7 +236,7 @@ export default function OrdersManagementPage() {
   // Fetch all orders on component mount
   useEffect(() => {
     fetchAllOrders();
-  }, [pagination.currentPage, pagination.pageSize]);
+  }, [pagination.currentPage, pagination.pageSize, filters]);
 
   const fetchProducts = async () => {
     try {
@@ -234,7 +258,19 @@ export default function OrdersManagementPage() {
   const fetchAllOrders = async () => {
     setIsLoadingOrders(true);
     try {
-      const response = await fetch(`/api/orders/list-v2?page=${pagination.currentPage}&limit=${pagination.pageSize}`);
+      const params = new URLSearchParams({
+        page: pagination.currentPage.toString(),
+        limit: pagination.pageSize.toString(),
+      });
+
+      // Add filters to params
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== '') {
+          params.append(key, value.toString());
+        }
+      });
+
+      const response = await fetch(`/api/orders/list-v2?${params.toString()}`);
       const result = await response.json();
       
       if (result.success) {
@@ -874,6 +910,90 @@ export default function OrdersManagementPage() {
     }, 300); // Increased delay to 300ms
   };
 
+  // Filter functions
+  const openFilterModal = (type: string, title: string, filterType: 'text' | 'select' | 'date' | 'checkbox', options: string[] = [], event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setFilterModal({
+      isOpen: true,
+      type,
+      title,
+      filterType,
+      options,
+      currentValue: filters[type as keyof typeof filters] || '',
+      position: {
+        x: rect.left + rect.width / 2,
+        y: rect.top
+      }
+    });
+  };
+
+  // Get filter options based on type
+  const getFilterOptions = (type: string) => {
+    switch (type) {
+      case 'state': return states;
+      case 'paymentStatus': return paymentModes;
+      case 'status': return orderStatuses;
+      case 'orderConfirmation': return orderConfirmations;
+      default: return [];
+    }
+  };
+
+  const closeFilterModal = () => {
+    setFilterModal({
+      isOpen: false,
+      type: '',
+      title: '',
+      filterType: 'text',
+      options: [],
+      currentValue: '',
+      position: { x: 0, y: 0 }
+    });
+  };
+
+  const applyFilter = (value: string | boolean) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterModal.type]: value
+    }));
+    
+    // Reset pagination when filters change
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1
+    }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      state: '',
+      paymentStatus: '',
+      processOrder: '',
+      orderPacked: '',
+      status: '',
+      date: '',
+      orderConfirmation: ''
+    });
+    
+    // Reset pagination when filters change
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1
+    }));
+  };
+
+  const removeFilter = (filterKey: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterKey]: ''
+    }));
+    
+    // Reset pagination when filters change
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1
+    }));
+  };
+
   const handlePopupUpdate = (updatedOrder: OrderRow) => {
     setOrders(prev => prev.map(order => 
       order.id === updatedOrder.id ? updatedOrder : order
@@ -964,6 +1084,40 @@ export default function OrdersManagementPage() {
               {syncMessage}
             </div>
           )}
+          
+          {/* Active Filters Display */}
+          {Object.values(filters).some(value => value && value !== '') && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-700">Active Filters:</span>
+                <button
+                  onClick={clearAllFilters}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Clear All
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(filters).map(([key, value]) => {
+                  if (value && value !== '') {
+                    return (
+                      <span key={key} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {key}: {value}
+                        <button
+                          onClick={() => removeFilter(key)}
+                          className="ml-1 text-blue-600 hover:text-blue-800 text-xs font-bold"
+                          title={`Remove ${key} filter`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Pagination Controls */}
@@ -1034,8 +1188,9 @@ export default function OrdersManagementPage() {
         {!isLoadingOrders && orders.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <div className="max-h-96 overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       #
@@ -1066,7 +1221,18 @@ export default function OrdersManagementPage() {
                     ) : (
                       <>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
+                          <div className="flex items-center space-x-1">
+                            <span>Date</span>
+                            <button
+                              onClick={(e) => openFilterModal('date', 'Filter by Date', 'date', [], e)}
+                              className="text-gray-400 hover:text-gray-600 p-1"
+                              title="Filter by Date"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                              </svg>
+                            </button>
+                          </div>
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Customer Name
@@ -1075,7 +1241,18 @@ export default function OrdersManagementPage() {
                           Contact
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          State
+                          <div className="flex items-center space-x-1">
+                            <span>State</span>
+                            <button
+                              onClick={(e) => openFilterModal('state', 'Filter by State', 'select', states, e)}
+                              className="text-gray-400 hover:text-gray-600 p-1"
+                              title="Filter by State"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                              </svg>
+                            </button>
+                          </div>
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Products
@@ -1084,23 +1261,78 @@ export default function OrdersManagementPage() {
                           Total Amount
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Payment
+                          <div className="flex items-center space-x-1">
+                            <span>Payment</span>
+                            <button
+                              onClick={(e) => openFilterModal('paymentStatus', 'Filter by Payment Status', 'select', paymentModes, e)}
+                              className="text-gray-400 hover:text-gray-600 p-1"
+                              title="Filter by Payment Status"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                              </svg>
+                            </button>
+                          </div>
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Order Confirmation
+                          <div className="flex items-center space-x-1">
+                            <span>Order Confirmation</span>
+                            <button
+                              onClick={(e) => openFilterModal('orderConfirmation', 'Filter by Order Confirmation', 'select', orderConfirmations, e)}
+                              className="text-gray-400 hover:text-gray-600 p-1"
+                              title="Filter by Order Confirmation"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                              </svg>
+                            </button>
+                          </div>
                         </th>
                         <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
+                          <div className="flex items-center space-x-1">
+                            <span>Status</span>
+                            <button
+                              onClick={(e) => openFilterModal('status', 'Filter by Status', 'select', orderStatuses, e)}
+                              className="text-gray-400 hover:text-gray-600 p-1"
+                              title="Filter by Status"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                              </svg>
+                            </button>
+                          </div>
                         </th>
                         {/* Admin/Super Admin Only Fields */}
                         {user && (user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN) && (
                           <>
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Process Order
+                              <div className="flex items-center space-x-1">
+                                <span>Process Order</span>
+                                <button
+                                  onClick={(e) => openFilterModal('processOrder', 'Filter by Process Order', 'checkbox', ['true', 'false'], e)}
+                                  className="text-gray-400 hover:text-gray-600 p-1"
+                                  title="Filter by Process Order"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                                  </svg>
+                                </button>
+                              </div>
                             </th>
 
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Order Packed
+                              <div className="flex items-center space-x-1">
+                                <span>Order Packed</span>
+                                <button
+                                  onClick={(e) => openFilterModal('orderPacked', 'Filter by Order Packed', 'checkbox', ['true', 'false'], e)}
+                                  className="text-gray-400 hover:text-gray-600 p-1"
+                                  title="Filter by Order Packed"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+                                  </svg>
+                                </button>
+                              </div>
                             </th>
 
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1137,6 +1369,8 @@ export default function OrdersManagementPage() {
                       rowColorClass = 'bg-blue-200 hover:bg-blue-300';
                     } else if (order.orderStatus === 'Exchange') {
                       rowColorClass = 'bg-purple-200 hover:bg-purple-300';
+                    } else if (order.orderStatus === 'Cancelled') {
+                      rowColorClass = 'bg-yellow-200 hover:bg-yellow-300';
                     } else {
                       rowColorClass = 'hover:bg-gray-100';
                     }
@@ -1203,7 +1437,7 @@ export default function OrdersManagementPage() {
                               value={order.comments || ''}
                               onChange={(e) => updateOrderField(order.id, 'comments', e.target.value)}
                               placeholder="Comments"
-                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="h-16 w-48 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </td>
                           
@@ -1403,7 +1637,7 @@ export default function OrdersManagementPage() {
                               value={order.comments || ''}
                               onChange={(e) => updateOrderField(order.id, 'comments', e.target.value)}
                               placeholder="Comments"
-                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="h-16 w-48 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </td>
                           
@@ -1476,6 +1710,7 @@ export default function OrdersManagementPage() {
                 })}
                 </tbody>
               </table>
+                </div>
             </div>
           </div>
         )}
@@ -1596,6 +1831,28 @@ export default function OrdersManagementPage() {
             onMouseEnter={handleExchangePopupMouseEnter}
             onMouseLeave={handleExchangePopupMouseLeave}
           />
+        )}
+
+        {/* Filter Modal */}
+        {filterModal.isOpen && (
+          <div
+            className="fixed z-50"
+            style={{
+              left: filterModal.position.x,
+              top: filterModal.position.y - 10,
+              transform: 'translateX(-50%)'
+            }}
+          >
+            <FilterModal
+              isOpen={filterModal.isOpen}
+              onClose={closeFilterModal}
+              title={filterModal.title}
+              filterType={filterModal.filterType}
+              options={getFilterOptions(filterModal.type)}
+              currentValue={filterModal.currentValue}
+              onApply={applyFilter}
+            />
+          </div>
         )}
       </div>
     </div>
