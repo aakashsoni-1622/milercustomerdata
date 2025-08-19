@@ -309,7 +309,7 @@ export function prepareCustomShopifyOrderData(
 ): OrderVariables {
   return {
     email: shopifyData.Email,
-    shopifyCustomerId: shopifyData["Customer ID"],
+    shopifyCustomerId: shopifyData["Customer ID"]?.toString(),
     orderId: orderData.order_number.toString(),
     customerName:
       shopifyData["First Name"] + " " + shopifyData["Last Name"] || "default",
@@ -317,7 +317,8 @@ export function prepareCustomShopifyOrderData(
     city: shopifyData["Default Address City"],
     country: shopifyData["Default Address Country Code"],
     date: orderData.created_at,
-    contactNo: shopifyData?.Phone || shopifyData["Default Address Phone"],
+    contactNo:
+      shopifyData?.Phone || shopifyData["Default Address Phone"]?.toString(),
     state:
       orderData.customer.default_address?.province ||
       shopifyData["Default Address Province Code"] ||
@@ -423,7 +424,7 @@ export const SHIPMENT_STATUS_REVERSE = Object.entries(SHIPMENT_STATUS).reduce(
 export const syncOrders = async () => {
   for (const customer of ALL_CUSTOMERS) {
     const customerOrders = await shopifyApi.getCustomerOrders(
-      parseInt(customer["Customer ID"]),
+      customer["Customer ID"],
       100
     );
     if (customerOrders.orders && customerOrders.orders.length > 0) {
