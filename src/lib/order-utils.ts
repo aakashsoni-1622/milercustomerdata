@@ -421,21 +421,299 @@ export const SHIPMENT_STATUS_REVERSE = Object.entries(SHIPMENT_STATUS).reduce(
   {} as Record<string, string>
 );
 
-export const syncOrders = async () => {
-  for (const customer of ALL_CUSTOMERS) {
-    const customerOrders = await shopifyApi.getCustomerOrders(
-      customer["Customer ID"],
-      100
-    );
-    if (customerOrders.orders && customerOrders.orders.length > 0) {
-      for (const order of customerOrders.orders) {
-        const variables = prepareCustomShopifyOrderData(customer, order as any);
-        if (variables.orderItems.length > 0) {
-          await createOrUpdateOrder(variables, true);
+// Advanced rate limiting for Shopify API (2 calls per second limit)
+class ShopifyRateLimiter {
+  private queue: Array<() => Promise<any>> = [];
+  private processing = false;
+  private lastCallTime = 0;
+  private readonly minInterval: number;
+  private readonly maxRetries: number;
+  private readonly retryDelay: number;
+
+  constructor(
+    callsPerSecond: number = 2,
+    maxRetries: number = 3,
+    retryDelay: number = 5000
+  ) {
+    this.minInterval = 1000 / callsPerSecond; // Convert calls per second to milliseconds
+    this.maxRetries = maxRetries;
+    this.retryDelay = retryDelay;
+  }
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
         }
+      });
+
+      this.processQueue();
+    });
+  }
+
+  private async processQueue() {
+    if (this.processing || this.queue.length === 0) {
+      return;
+    }
+
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastCall = now - this.lastCallTime;
+
+      if (timeSinceLastCall < this.minInterval) {
+        const waitTime = this.minInterval - timeSinceLastCall;
+        console.log(
+          `Rate limiting: waiting ${waitTime}ms before next API call...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
+
+      const task = this.queue.shift();
+      if (task) {
+        this.lastCallTime = Date.now();
+        await task();
+      }
+    }
+
+    this.processing = false;
+  }
+
+  // Get current queue status
+  getStatus() {
+    return {
+      queueLength: this.queue.length,
+      processing: this.processing,
+      lastCallTime: this.lastCallTime,
+      minInterval: this.minInterval,
+    };
+  }
+}
+
+// Create rate limiter with conservative settings (1.5 calls per second to be safe)
+const shopifyRateLimiter = new ShopifyRateLimiter(1.5, 3, 5000);
+
+// Export rate limiter status for monitoring
+export const getRateLimiterStatus = () => {
+  return shopifyRateLimiter.getStatus();
+};
+
+// Function to pause sync if needed
+export const pauseSync = () => {
+  // This could be implemented to pause the current sync operation
+  console.log(
+    "Sync pause requested - this will take effect after current operation completes"
+  );
+};
+
+export const syncOrders = async () => {
+  console.log(`Starting order sync for ${ALL_CUSTOMERS.length} customers...`);
+
+  let successCount = 0;
+  let errorCount = 0;
+  const startTime = Date.now();
+
+  for (let i = 0; i < ALL_CUSTOMERS.length; i++) {
+    const customer = ALL_CUSTOMERS[i];
+    const progress = (((i + 1) / ALL_CUSTOMERS.length) * 100).toFixed(1);
+    console.log(
+      `[${progress}%] Processing customer ${i + 1}/${ALL_CUSTOMERS.length}: ${
+        customer["Customer ID"]
+      }`
+    );
+
+    try {
+      const customerOrders = await shopifyRateLimiter.execute(() =>
+        shopifyApi.getCustomerOrders(customer["Customer ID"], 100)
+      );
+
+      if (customerOrders.orders && customerOrders.orders.length > 0) {
+        console.log(
+          `  Found ${customerOrders.orders.length} orders for customer ${customer["Customer ID"]}`
+        );
+
+        for (let j = 0; j < customerOrders.orders.length; j++) {
+          const order = customerOrders.orders[j];
+          const orderProgress = (
+            ((j + 1) / customerOrders.orders.length) *
+            100
+          ).toFixed(1);
+          console.log(
+            `    [${orderProgress}%] Processing order ${j + 1}/${
+              customerOrders.orders.length
+            }: ${order.id}`
+          );
+
+          try {
+            const variables = prepareCustomShopifyOrderData(
+              customer,
+              order as any
+            );
+            if (variables.orderItems.length > 0) {
+              await createOrUpdateOrder(variables, true);
+            }
+          } catch (orderError) {
+            console.error(
+              `    Error processing order ${order.id}:`,
+              orderError
+            );
+            errorCount++;
+            // Continue with next order
+            continue;
+          }
+        }
+        successCount++;
+      } else {
+        console.log(
+          `  No orders found for customer ${customer["Customer ID"]}`
+        );
+        successCount++;
+      }
+    } catch (error) {
+      console.error(
+        `  Error processing customer ${customer["Customer ID"]}:`,
+        error
+      );
+      errorCount++;
+
+      // If it's a rate limit error, wait longer before continuing
+      if (error instanceof Error && error.message.includes("429")) {
+        console.log(
+          "  Rate limit hit, waiting 10 seconds before continuing..."
+        );
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+      }
+
+      // Continue with next customer instead of failing completely
+      continue;
+    }
+
+    // Log progress every 10 customers
+    if ((i + 1) % 10 === 0) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(
+        `  Progress: ${i + 1}/${
+          ALL_CUSTOMERS.length
+        } customers processed in ${elapsed}s`
+      );
     }
   }
 
-  return "Orders synced successfully";
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`Order sync completed in ${totalTime}s`);
+  console.log(
+    `Results: ${successCount} customers processed successfully, ${errorCount} errors`
+  );
+
+  return `Orders synced successfully. Processed ${successCount} customers in ${totalTime}s with ${errorCount} errors.`;
+};
+
+// Batch processing version for large datasets
+export const syncOrdersInBatches = async (batchSize: number = 10) => {
+  console.log(
+    `Starting batch order sync for ${ALL_CUSTOMERS.length} customers in batches of ${batchSize}...`
+  );
+
+  let successCount = 0;
+  let errorCount = 0;
+  const startTime = Date.now();
+
+  for (
+    let batchStart = 0;
+    batchStart < ALL_CUSTOMERS.length;
+    batchStart += batchSize
+  ) {
+    const batchEnd = Math.min(batchStart + batchSize, ALL_CUSTOMERS.length);
+    const batch = ALL_CUSTOMERS.slice(batchStart, batchEnd);
+
+    console.log(
+      `\nProcessing batch ${Math.floor(batchStart / batchSize) + 1}/${Math.ceil(
+        ALL_CUSTOMERS.length / batchSize
+      )} (customers ${batchStart + 1}-${batchEnd})`
+    );
+
+    // Process batch with rate limiting
+    for (let i = 0; i < batch.length; i++) {
+      const customer = batch[i];
+      const globalIndex = batchStart + i;
+      const progress = (
+        ((globalIndex + 1) / ALL_CUSTOMERS.length) *
+        100
+      ).toFixed(1);
+
+      console.log(
+        `[${progress}%] Processing customer ${globalIndex + 1}/${
+          ALL_CUSTOMERS.length
+        }: ${customer["Customer ID"]}`
+      );
+
+      try {
+        const customerOrders = await shopifyRateLimiter.execute(() =>
+          shopifyApi.getCustomerOrders(customer["Customer ID"], 100)
+        );
+
+        if (customerOrders.orders && customerOrders.orders.length > 0) {
+          console.log(
+            `  Found ${customerOrders.orders.length} orders for customer ${customer["Customer ID"]}`
+          );
+
+          for (const order of customerOrders.orders) {
+            try {
+              const variables = prepareCustomShopifyOrderData(
+                customer,
+                order as any
+              );
+              if (variables.orderItems.length > 0) {
+                await createOrUpdateOrder(variables, true);
+              }
+            } catch (orderError) {
+              console.error(
+                `    Error processing order ${order.id}:`,
+                orderError
+              );
+              errorCount++;
+            }
+          }
+          successCount++;
+        } else {
+          console.log(
+            `  No orders found for customer ${customer["Customer ID"]}`
+          );
+          successCount++;
+        }
+      } catch (error) {
+        console.error(
+          `  Error processing customer ${customer["Customer ID"]}:`,
+          error
+        );
+        errorCount++;
+
+        if (error instanceof Error && error.message.includes("429")) {
+          console.log(
+            "  Rate limit hit, waiting 15 seconds before continuing..."
+          );
+          await new Promise((resolve) => setTimeout(resolve, 15000));
+        }
+      }
+    }
+
+    // Add a small delay between batches to be extra safe
+    if (batchEnd < ALL_CUSTOMERS.length) {
+      console.log("  Batch completed, waiting 2 seconds before next batch...");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\nBatch order sync completed in ${totalTime}s`);
+  console.log(
+    `Results: ${successCount} customers processed successfully, ${errorCount} errors`
+  );
+
+  return `Orders synced successfully in batches. Processed ${successCount} customers in ${totalTime}s with ${errorCount} errors.`;
 };

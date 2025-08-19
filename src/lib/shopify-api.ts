@@ -170,6 +170,33 @@ class ShopifyApiClient {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Shopify API error response:`, errorText);
+
+        // Handle rate limiting with retry logic
+        if (response.status === 429) {
+          const retryAfter = response.headers.get("Retry-After");
+          const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 5000; // Default to 5 seconds
+          console.log(`Rate limited. Waiting ${waitTime}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+
+          // Retry the request once
+          console.log("Retrying request after rate limit...");
+          const retryResponse = await fetch(url.toString(), {
+            headers: {
+              "X-Shopify-Access-Token": this.accessToken,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!retryResponse.ok) {
+            const retryErrorText = await retryResponse.text();
+            throw new Error(
+              `Shopify API error after retry: ${retryResponse.status} ${retryResponse.statusText} - ${retryErrorText}`
+            );
+          }
+
+          return retryResponse.json();
+        }
+
         throw new Error(
           `Shopify API error: ${response.status} ${response.statusText} - ${errorText}`
         );
