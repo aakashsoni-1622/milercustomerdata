@@ -1,8 +1,3 @@
-import { ALL_CUSTOMERS } from "./customers-data";
-import {
-  createOrUpdateOrder,
-  prepareCustomShopifyOrderData,
-} from "./order-utils";
 import { Fulfillment } from "@/types/shopify";
 
 // Shopify Admin API configuration and helper functions
@@ -290,24 +285,6 @@ class ShopifyApiClient {
     // If fetchAll is true, get all orders across all pages
     if (fetchAll) {
       return this.getAllOrders(status);
-    }
-
-    for (const customer of ALL_CUSTOMERS) {
-      const customerOrders = await this.getCustomerOrders(
-        parseInt(customer["Customer ID"]),
-        limit
-      );
-      if (customerOrders.orders && customerOrders.orders.length > 0) {
-        for (const order of customerOrders.orders) {
-          const variables = prepareCustomShopifyOrderData(
-            customer,
-            order as any
-          );
-          if (variables.orderItems.length > 0) {
-            await createOrUpdateOrder(variables, true);
-          }
-        }
-      }
     }
 
     const response = await this.makeRequest<ShopifyApiResponse<ShopifyOrder>>(
